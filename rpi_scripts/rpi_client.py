@@ -8,8 +8,8 @@ from Crypto import Random
 
 # global
 targetServerIp = "127.0.0.1"
-targetServerPort = 8888
-secretKey = "1616161616161616"
+targetServerPort = 1337
+secretKey = b"1616161616161616"
 
 # RPi Socket client
 class RpiSocketClient:
@@ -67,7 +67,7 @@ def encode_encrypt_message(message):
     """Pads message to nearest multiple of 16 bytes, encrypt with AES, then encoded in base64"""
     bytes_for_padding = 16 - (len(message) % 16)
     padding_str = "0" * bytes_for_padding
-    padded_msg = message + padding_str
+    padded_msg = (message + padding_str).encode()
     iv = Random.new().read(AES.block_size)
     cipher = AES.new(secretKey, AES.MODE_CBC, iv)
     msg = base64.b64encode(iv + cipher.encrypt(padded_msg))
@@ -82,14 +82,52 @@ if __name__ == "__main__":
     # Control Flags
 
     # Initialization (1) - Connect to Eval Server
-    rpi_socket_client = RpiSocketClient()
+    # rpi_socket_client = RpiSocketClient()
 
     # Initialization (2) - Connect to Arduino
-    rpi_arduino_client = RpiArduinoClient()
+    # rpi_arduino_client = RpiArduinoClient()
     # rpi_arduino_client.three_way_handshake()
 
     while True:
-        pass
+        print("Enter Mode: (1)Comms to server, (2)Comms to arduino")
+        mode = input()
+        if mode == "1":
+            rpi_socket_client = RpiSocketClient()
+            print("Relay password to sever: 16161616161616")
+            print("Wait for server prompt\n")
+            while True:
+                print("Enter input: action voltage current power cumulative_power")
+                test = input()
+                rpi_socket_client.send_message(format_results(*test.split()))
+        elif mode == "2":
+            print("Enter any key to start serial port")
+            input()
+            rpi_arduino_client = RpiArduinoClient()
+            while True:
+                print("Functionality to test: (1)Send One, (2)Receive One, (3)Initiate Handshake, (E)exit")
+                mode = input()
+                if mode == "1":
+                    while True:
+                        print("Input message to send:")
+                        message = input()
+                        if message == "E":
+                            break
+                        else:
+                            rpi_arduino_client.send_message(input())
+                elif mode == "2":
+                    while True:
+                        print("Enter any key to receive:")
+                        message = input()
+                        if message == "E":
+                            break
+                        else:
+                            print(rpi_arduino_client.read_message())
+                elif mode == "3":
+                    while True:
+                        print("Enter any key to initiate handshake")
+                        input()
+                        rpi_arduino_client.three_way_handshake()
+
     # Data Reading
 
     # Data Processing
