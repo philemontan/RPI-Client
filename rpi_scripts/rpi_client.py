@@ -113,6 +113,7 @@ if __name__ == "__main__":
                         if message == "E":
                             break
                         else:
+                            print("Message Sent:", message)
                             rpi_arduino_client.send_message(input())
                 elif mode == "2":
                     while True:
