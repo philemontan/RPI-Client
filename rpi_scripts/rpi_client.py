@@ -40,7 +40,7 @@ class RpiArduinoClient:
 
     def send_message(self, message):
         """Prepends CR+LF to message, before writing it to the serial port"""
-        self.port.write("\r\n" + message)
+        self.port.write(message)
 
     def read_message(self):
         """Returns line read up till carriage return or empty char"""
