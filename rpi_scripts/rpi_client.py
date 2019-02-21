@@ -142,6 +142,7 @@ def interactive_mode(server_client, mega_client):
                 elif mode == "2":
                     print("Enter any key to readline:")
                     input()
+                    print("Waiting for message:")
                     mega_client.read_message()
 
                 elif mode == "3":
