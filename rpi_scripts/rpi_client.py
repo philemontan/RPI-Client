@@ -122,9 +122,12 @@ def interactive_mode(server_client, mega_client):
         if mode == "1":
             print("Relay password to sever:", server_client.key, ", and remember to wait for move prompt on GUI!")
             while True:
-                print("Enter input: action voltage current power cumulative_power")
+                print("Enter input: action voltage current power cumulative_power // or E to exit")
                 message = input()
-                server_client.send_message(format_results(*message.split()))
+                if message == "E":
+                    break
+                else:
+                    server_client.send_message(format_results(*message.split()))
 
         # Serial communication to Mega
         elif mode == "2":
@@ -145,10 +148,15 @@ def interactive_mode(server_client, mega_client):
                     print("Waiting for message:")
                     mega_client.read_message()
 
+                # Handshake Mode
                 elif mode == "3":
                     print("Enter any key to initiate handshake")
                     input()
                     mega_client.three_way_handshake()
+
+                # Exit
+                elif mode == "E":
+                    break
 
 
 if __name__ == "__main__":
