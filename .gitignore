@@ -1,2 +1,3 @@
 .idea/
 eval_scripts/log04.csv
+eval_scripts/__pycache__
