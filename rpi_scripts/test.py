@@ -18,13 +18,13 @@ fail_fast = False
 class RpiMegaClient:
     def __init__(self, terminal="/dev/ttyAMA0", baudrate=115200):
         try:
-            self.port = serial.Serial(terminal, baudrate, timeout=0)
+            self.port = serial.Serial(terminal, baudrate, timeout=3)
             self.port.open()
             if self.port.is_open:
                 logging.info("Serial port is open")
         except serial.SerialException as e1:
             logging.info("An error occurred, system exiting")
-            logging.debug("Attempted to open Serial port on /dev/ttyAMA0, baudrate:" + baudrate + str(e1))
+            logging.debug("Attempted to open Serial port on /dev/ttyAMA0, baudrate:" + str(baudrate) + str(e1))
             if fail_fast:
                 sys.exit()
         else:
@@ -34,7 +34,13 @@ class RpiMegaClient:
         self.port.write((message + '\n').encode())
 
     def read_message(self):
-        print(self.port.in_waiting)
+        a = 1
+        while True:
+            time.sleep(1)
+            print("Read: ", self.port.read(1).decode("utf-8"))
+            print("In waiting: ", self.port.in_waiting)
+            print("Spacer ", a)
+            a += 1
         '''message = ""
         string_complete = False
         while True:
@@ -113,7 +119,7 @@ def fetch_script_arguments():
     return parser.parse_args()
 
 
-def interactive_mode(server_client, mega_client):
+def interactive_mode():
     """Interactive mode intended for convenient testing"""
     while True:
         print("Enter Mode: (1)Comms to server, (2)Comms to arduino")
@@ -121,6 +127,7 @@ def interactive_mode(server_client, mega_client):
 
         # Socket communication to Server
         if mode == "1":
+            server_client = RpiEvalServerClient()
             print("Relay password to sever:", server_client.key, ", and remember to wait for move prompt on GUI!")
             while True:
                 print("Enter input: action voltage current power cumulative_power // or E to exit")
@@ -132,6 +139,7 @@ def interactive_mode(server_client, mega_client):
 
         # Serial communication to Mega
         elif mode == "2":
+            mega_client = RpiMegaClient()
             while True:
                 print("Functionality to test: (1)Send One, (2)Receive One, (3)Initiate Handshake, (E)exit")
                 mode = input()
@@ -166,8 +174,8 @@ if __name__ == "__main__":
 
     # Setup & Configuration
     logging.basicConfig(level=logging.DEBUG if args.logging_mode == "debug" else logging.INFO)
-    server_client = RpiEvalServerClient(target_ip=args.target_ip, target_port=args.target_port, key=args.key)
-    mega_client = RpiMegaClient(baudrate=args.baud_rate)
+#    server_client = RpiEvalServerClient(target_ip=args.target_ip, target_port=args.target_port, key=args.key)
+#    mega_client = RpiMegaClient(baudrate=args.baud_rate)
 
     # Launch mode loops
-    interactive_mode(server_client, mega_client)
+    interactive_mode()
