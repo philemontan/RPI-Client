@@ -78,6 +78,7 @@ class RpiEvalServerClient:
             logging.info("Successfully connected to:" + target_ip + "(" + target_port + ")")
 
     def send_message(self, message):
+        # No error detection/handling implemented for now
         self.sock.sendall(encode_encrypt_message(message, self.key))
 
 
@@ -118,7 +119,7 @@ def interactive_mode(args):
         # Socket communication to Server
         if mode == "1":
             server_client = RpiEvalServerClient(args.target_ip, args.target_port, args.key)
-            print("Relay password to sever:", server_client.key, ", and remember to wait for move prompt on GUI!")
+            print("Relay password to sever:", server_client.key, ", and wait for move prompt on GUI")
             while True:
                 print("Enter input: action voltage current power cumulative_power // or E to exit")
                 message = input()
@@ -159,7 +160,15 @@ def interactive_mode(args):
 
 
 def evaluation_mode(mega_client, server_client):
-    print("Not Ready")
+    # Loop Vars
+    connection_unstable = True
+    while True:
+        # Blocks till handshake successful
+        if connection_unstable:
+            mega_client.three_way_handshake()
+
+        
+
 
 
 if __name__ == "__main__":
