@@ -167,7 +167,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG if args.logging_mode == "debug" else logging.INFO)
     mode = 0
 
-    while mode != 1 and mode != 2:
+    while mode != "1" and mode != "2":
         print("Select mode: (1)Interactive(Separate Testing), (2)Evaluation")
         mode = input()
 
