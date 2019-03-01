@@ -12,57 +12,47 @@ from Crypto.Cipher import AES
 from Crypto import Random
 
 #Global Flags
-fail_fast = False
+fail_fast = False  # No error recovery if true. System exits immediately on exception.
 
 # Client for Mega communications
 class RpiMegaClient:
     def __init__(self, terminal="/dev/ttyAMA0", baudrate=115200):
         try:
             self.port = serial.Serial(terminal, baudrate, timeout=3)
-            self.port.open()
             if self.port.is_open:
-                logging.info("Serial port is open")
+                logging.info("Serial port already open")
+            else:
+                self.port.open()
+                logging.info("Successfully opened serial port:", terminal, "w/ baud rate:", baudrate)
         except serial.SerialException as e1:
-            logging.info("An error occurred, system exiting")
-            logging.debug("Attempted to open Serial port on /dev/ttyAMA0, baudrate:" + str(baudrate) + str(e1))
+            logging.debug("Error occured attempting to open Serial port on ", terminal, str(baudrate), str(baudrate))
+            logging.debug("System error details:\n", str(e1))
             if fail_fast:
                 sys.exit()
-        else:
-            logging.info("Successfully opened serial port:", terminal, "w/ baud rate:", baudrate)
 
     def send_message(self, message):
-        self.port.write((message + '\n').encode())
+        self.port.write((message + '\n').encode("utf-8"))
+        return message
 
     def read_message(self):
-        a = 1
-        while True:
-            time.sleep(1)
-            print("Read: ", self.port.read(1).decode("utf-8"))
-            print("In waiting: ", self.port.in_waiting)
-            print("Spacer ", a)
-            a += 1
-        '''message = ""
-        string_complete = False
-        while True:
-            if string_complete:
-                return message
-            while self.port.in_waiting:
-                ch = self.port.read()
-                message += ch
-                if ch == '\n':
-                    string_complete = True
-                    break'''
+        return self.port.read_until().decode("utf-8")
 
     def three_way_handshake(self):
-        self.send_message("hello")
-        logging.info("Three-way-handshake: hello sent")
-        message = ""
-        while message != "ack":
-            logging.info("Three-way-handshake: waiting for ack")
-            time.sleep(2)
-            message = self.read_message()
-        self.send_message("ack")
-        logging.info("Three-way-handshake: complete")
+        while True:
+            self.send_message("H")
+            logging.info("H sent")
+            logging.info("Sleep for 1 second")
+            time.sleep(1)
+            if self.read_message() == "A\n":
+                logging.info("A received")
+                self.send_message("A")
+                logging.info("A sent")
+                logging.info("Entering sleep for 3 seconds")
+                time.sleep(3)
+                self.port.reset_input_buffer()
+                logging.info("Buffer flushed")
+                logging.info("Handshake complete")
+                break
 
 
 # Client for Server communication
@@ -119,15 +109,15 @@ def fetch_script_arguments():
     return parser.parse_args()
 
 
-def interactive_mode():
+def interactive_mode(args):
     """Interactive mode intended for convenient testing"""
     while True:
-        print("Enter Mode: (1)Comms to server, (2)Comms to arduino")
+        print("Component to test: (1)Comms to server, (2)Comms to arduino (3)ML prediction")
         mode = input()
 
         # Socket communication to Server
         if mode == "1":
-            server_client = RpiEvalServerClient()
+            server_client = RpiEvalServerClient(args.target_ip, args.target_port, args.key)
             print("Relay password to sever:", server_client.key, ", and remember to wait for move prompt on GUI!")
             while True:
                 print("Enter input: action voltage current power cumulative_power // or E to exit")
@@ -139,28 +129,27 @@ def interactive_mode():
 
         # Serial communication to Mega
         elif mode == "2":
-            mega_client = RpiMegaClient()
+            mega_client = RpiMegaClient(baudrate=args.baud_rate)
             while True:
-                print("Functionality to test: (1)Send One, (2)Receive One, (3)Initiate Handshake, (E)exit")
+                print("Functionality to test: (1)Send 1 message, (2)Repeat read & print, (3)3-way-Handshake, (E)exit")
                 mode = input()
 
-                # Send Mode
+                # Send 1 message
                 if mode == "1":
                     print("Input message to send:")
-                    message = input()
-                    mega_client.send_message(message)
+                    print("Message sent: ", mega_client.send_message(input()))  # Note that input() strips newline chars
 
-                # Receive Mode
+                # Repeat read & print
                 elif mode == "2":
-                    print("Enter any key to readline:")
+                    print("Enter any key to begin (keyboard interrupt required to exit this mode):")
                     input()
-                    print("Waiting for message:")
                     while True:
-                        mega_client.read_message()
+                        print("Waiting for message (3 sec timeout):")
+                        print("Message received: ", mega_client.read_message())
 
                 # Handshake Mode
                 elif mode == "3":
-                    print("Enter any key to initiate handshake")
+                    print("Enter any key to initiate handshake mode:")
                     input()
                     mega_client.three_way_handshake()
 
@@ -169,13 +158,23 @@ def interactive_mode():
                     break
 
 
+def evaluation_mode(mega_client, server_client):
+    print("Not Ready")
+
+
 if __name__ == "__main__":
     args = fetch_script_arguments()
-
-    # Setup & Configuration
     logging.basicConfig(level=logging.DEBUG if args.logging_mode == "debug" else logging.INFO)
-#    server_client = RpiEvalServerClient(target_ip=args.target_ip, target_port=args.target_port, key=args.key)
-#    mega_client = RpiMegaClient(baudrate=args.baud_rate)
+    mode = 0
 
-    # Launch mode loops
-    interactive_mode()
+    while mode != 1 and mode != 2:
+        print("Select mode: (1)Interactive(Separate Testing), (2)Evaluation")
+        mode = input()
+
+    # Mode loops
+    if mode == 1:
+        interactive_mode(args)
+    elif mode == 2:
+        server_client = RpiEvalServerClient(args.target_ip, args.target_port, args.key)
+        mega_client = RpiMegaClient(baudrate=args.baud_rate)
+        evaluation_mode(mega_client, server_client)
