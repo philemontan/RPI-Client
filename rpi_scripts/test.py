@@ -172,9 +172,9 @@ if __name__ == "__main__":
         mode = input()
 
     # Mode loops
-    if mode == 1:
+    if mode == "1":
         interactive_mode(args)
-    elif mode == 2:
+    elif mode == "2":
         server_client = RpiEvalServerClient(args.target_ip, args.target_port, args.key)
         mega_client = RpiMegaClient(baudrate=args.baud_rate)
         evaluation_mode(mega_client, server_client)
