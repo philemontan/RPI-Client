@@ -2,6 +2,7 @@
 import argparse
 import logging
 import sys
+from enum import Enum
 
 # Third party imports
 import serial
@@ -13,6 +14,9 @@ from Crypto import Random
 
 #Global Flags
 fail_fast = False  # No error recovery if true. System exits immediately on exception.
+frame_length = 50  # 1 frame per prediction
+sampling_interval = 0.02  # frames per second: frame_length / (1 / sampling interval) ==> 1 frame per second
+
 
 # Client for Mega communications
 class RpiMegaClient:
@@ -81,6 +85,29 @@ class RpiEvalServerClient:
         # No error detection/handling implemented for now
         self.sock.sendall(encode_encrypt_message(message, self.key))
 
+
+# Message Types
+class MessageType(Enum):
+    MOVEMENT = 1
+    POWER = 2
+
+class Message:
+    def __init__(self, message_type, readings):
+        self.type = message_type
+        if self.type == MessageType.MOVEMENT:
+            self.left = readings[0]
+            self.right = readings[1]
+        elif self.type == MessageType.POWER:
+            self.reading=readings
+        else:
+            raise Exception("Unknown message type: ", message_type)
+
+
+# Message Parser
+class MessageParser:
+    """Parses messages sent from the Mega"""
+    def parse(self, input_message):
+        pass
 
 def encode_encrypt_message(message, key):
     """Pads message to nearest multiple of 16 bytes, encrypt with AES, then encoded in base64"""
@@ -162,12 +189,18 @@ def interactive_mode(args):
 def evaluation_mode(mega_client, server_client):
     # Loop Vars
     connection_unstable = True
+
     while True:
         # Blocks till handshake successful
         if connection_unstable:
             mega_client.three_way_handshake()
 
-        
+        # Read data blocks, based on frame length
+        for i in range(frame_length):
+            if mega_client.read_message()
+
+        #
+
 
 
 
