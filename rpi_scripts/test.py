@@ -2,7 +2,6 @@
 import argparse
 import logging
 import sys
-import ast
 from enum import Enum
 
 # Third party imports
@@ -15,9 +14,10 @@ from Crypto import Random
 
 #Global Flags
 fail_fast = False  # No error recovery if true. System exits immediately on exception.
+
 frame_length = 50  # 1 frame per prediction
 sampling_interval = 0.02  # frames per second: frame_length / (1 / sampling interval) ==> 1 frame per second
-
+overlap_ratio = 0.5
 
 # Client for Mega communications
 class RpiMegaClient:
@@ -85,34 +85,73 @@ class RpiEvalServerClient:
         self.sock.sendall(encode_encrypt_message(message, self.key))
 # Message Types
 class MessageType(Enum):
-    MOVEMENT = 1
-    POWER = 2
+    MOVEMENT = "M"
+    POWER = "P"
+class GeneralMessageIndex(Enum):
+    MESSAGE_NUMBER = 0
+    MESSAGE_TYPE = 1
+class MovementMessageIndex(Enum):
+    LEFT_ACCEL_X = 3
+    LEFT_ACCEL_Y = 4
+    LEFT_ACCEL_Z = 5
+    LEFT_GYRO_X = 6
+    LEFT_GYRO_Y = 7
+    LEFT_GYRO_Z = 8
+    RIGHT_ACCEL_X = 9
+    RIGHT_ACCEL_Y = 10
+    RIGHT_ACCEL_Z = 11
+    RIGHT_GYRO_X = 12
+    RIGHT_GYRO_Y = 13
+    RIGHT_GYRO_Z = 14
+    CHECKSUM = 15
+class PowerMessageIndex(Enum):
+    VOLTAGE = 2
+    CURRENT = 3
+    CHECKSUM = 4
 class Message:
     def __init__(self, message_type, readings):
         self.type = message_type
-        if self.type == MessageType.MOVEMENT:
-            self.left = readings[0]
-            self.right = readings[1]
-        elif self.type == MessageType.POWER:
-            self.reading=readings
-        else:
-            raise Exception("Unknown message type: ", message_type)
+        self.readings = readings
+
 # Message Parser
 class MessageParser:
-    """Parses messages sent from the Mega"""
-    def parse(self, message):
-        pass
+    """Parses readings messages sent from the Mega, not intended for general message parsing"""
+    @staticmethod
+    def parse(message):
+        if MessageParser.validity_check(message):
+            return Message(MessageType.POWER, [])
+        else:
+            raise Exception("Message validity check failed")
 
-    def format_check(self, message):
+    @staticmethod
+    def validity_check(message):
         message_length = len(message)
+        # Sentinel framing check
         if message[0] != '[' or message[message_length-1] != '\n' or message[message_length-2] != ']':
+            logging.debug("Sentinel framing error")
             return False
 
-        # trim message
-        message = message[1:message_length-2]  # Removes opening, closing bracket & \n
-        message_arr = message.split(",")
-        if len(message_arr) < 4:  # Shortest valid message: [23,P,0.2,0.3]
+        message_arr = message[1:message_length - 2].split(",")
+        # Quick length check
+        if len(message_arr) < 5:  # Shortest valid message: [23,P,0.2,0.3,CHECKSUM]
+            logging.debug("Short message error")
             return False
+        # Unknown type check
+        message_type = message_arr[GeneralMessageIndex.MESSAGE_TYPE]
+        if  message_type not in [MessageType.MOVEMENT, MessageType.POWER]:
+            logging.debug("Invalid message type error")
+            return False
+        # Number of elements check
+        if message_type == MessageType.MOVEMENT and len(message_arr) != 15:
+            logging.debug("Incorrect number of elements error (movement message)")
+            return False
+        if message_type == MessageType.POWER and len(message_arr) != 5:
+            logging.debug("Incorrect number of elements error (power message)")
+            return False
+        # Checksum validation
+        checksum = bytes(1)
+        for string in message_arr:
+            checksum = string ^ checksum
 
 
 def encode_encrypt_message(message, key):
@@ -124,9 +163,13 @@ def encode_encrypt_message(message, key):
     cipher = AES.new(key.encode(), AES.MODE_CBC, iv)
     msg = base64.b64encode(iv + cipher.encrypt(padded_msg))
     return msg
+
+
 def format_results(action, voltage, current, power, cumulative_power):
     """Format results to: ‘#action | voltage | current | power | cumulativepower|’"""
     return '#' + action + '|' + str(voltage) + '|' + str(current) + '|' + str(power) + '|' + str(cumulative_power) + '|'
+
+
 def fetch_script_arguments():
     """Fetches command line arguments, all are required"""
     parser = argparse.ArgumentParser()
@@ -137,6 +180,8 @@ def fetch_script_arguments():
                         , required=True)
     parser.add_argument('-l', '--logging_mode', help="Enables debug printing (debug/none)", required=True)
     return parser.parse_args()
+
+
 def interactive_mode(args):
     """Interactive mode intended for convenient testing"""
     while True:
@@ -184,38 +229,33 @@ def interactive_mode(args):
                 # Exit
                 elif mode == "E":
                     break
-def evaluation_mode(mega_client, server_client, pi_parser):
+
+
+def evaluation_mode(mega_client, server_client):
     # Loop Vars
-    connection_unstable = True
-    wrong_format_count = 0
+    data_buffer = []
+    cumulative_power = 0.0
 
+    # (Blocking)Initial Handshake
+    mega_client.three_way_handshake()
+
+    # Generate unlimited predictions
     while True:
-        # Blocks till handshake successful
-        if connection_unstable:
-            mega_client.three_way_handshake()
+        error_count = 0
 
-        # Reading state, based on frame length
-        for i in range(frame_length):
-            # Read message
+        # Per-prediction data read
+        while len(data_buffer) < frame_length:
             try:
-                message = pi_parser.parse(mega_client.read_message())
-            except Exception as error:
-                logging.debug(repr(error))
+                message = MessageParser.parse(mega_client.read_message())
+            except Exception as err:
+                logging.debug(repr(err))
                 if fail_fast:
                     sys.exit()
-                else:
-                    connection_unstable = True
-                    break
-            if connection_unstable:
-                continue #  Return to handshake
-
-
-
-
-
-
-        #
-
+                error_count += 1
+                if error_count == 3:
+                    data_buffer.clear()
+                    mega_client.three_way_handshake()
+            else:
 
 
 
@@ -234,5 +274,4 @@ if __name__ == "__main__":
     elif mode == "2":
         server_client = RpiEvalServerClient(args.target_ip, args.target_port, args.key)
         mega_client = RpiMegaClient(baudrate=args.baud_rate)
-        pi_parser = MessageParser()
-        evaluation_mode(mega_client, server_client, pi_parser)
+        evaluation_mode(mega_client, server_client)
