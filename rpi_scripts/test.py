@@ -2,6 +2,7 @@
 import argparse
 import logging
 import sys
+import ast
 from enum import Enum
 
 # Third party imports
@@ -29,7 +30,7 @@ class RpiMegaClient:
                 self.port.open()
                 logging.info("Successfully opened serial port:", terminal, "w/ baud rate:", baudrate)
         except serial.SerialException as e1:
-            logging.debug("Error occured attempting to open Serial port on ", terminal, str(baudrate), str(baudrate))
+            logging.debug("Error occurred attempting to open Serial port on ", terminal, str(baudrate), str(baudrate))
             logging.debug("System error details:\n", str(e1))
             if fail_fast:
                 sys.exit()
@@ -39,7 +40,7 @@ class RpiMegaClient:
         return message
 
     def read_message(self):
-        return self.port.read_until().decode("utf-8")
+        return self.port.read_until().decode("utf-8")  #\n is not removed
 
     def three_way_handshake(self):
         while True:
@@ -106,8 +107,19 @@ class Message:
 # Message Parser
 class MessageParser:
     """Parses messages sent from the Mega"""
-    def parse(self, input_message):
+    def parse(self, message):
         pass
+
+    def format_check(self, message):
+        message_length = len(message)
+        if message[0] != '[' or message[message_length-1] != '\n' or message[message_length-2] != ']':
+            return False
+
+        # trim message
+        message = message[1:message_length-2]
+        message = message.split()
+        arr = ast.literal_eval(message.rstrip('\r\n'))
+
 
 def encode_encrypt_message(message, key):
     """Pads message to nearest multiple of 16 bytes, encrypt with AES, then encoded in base64"""
@@ -189,15 +201,17 @@ def interactive_mode(args):
 def evaluation_mode(mega_client, server_client):
     # Loop Vars
     connection_unstable = True
+    wrong_format_count = 0
 
     while True:
         # Blocks till handshake successful
         if connection_unstable:
             mega_client.three_way_handshake()
 
-        # Read data blocks, based on frame length
+        # Reading state, based on frame length
         for i in range(frame_length):
-            if mega_client.read_message()
+            message = mega_client.read_message()
+
 
         #
 
