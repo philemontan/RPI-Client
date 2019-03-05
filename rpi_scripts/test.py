@@ -58,8 +58,6 @@ class RpiMegaClient:
                 logging.info("Buffer flushed")
                 logging.info("Handshake complete")
                 break
-
-
 # Client for Server communication
 class RpiEvalServerClient:
     """Opens connection to remote host socket, provides a send API"""
@@ -85,13 +83,10 @@ class RpiEvalServerClient:
     def send_message(self, message):
         # No error detection/handling implemented for now
         self.sock.sendall(encode_encrypt_message(message, self.key))
-
-
 # Message Types
 class MessageType(Enum):
     MOVEMENT = 1
     POWER = 2
-
 class Message:
     def __init__(self, message_type, readings):
         self.type = message_type
@@ -102,8 +97,6 @@ class Message:
             self.reading=readings
         else:
             raise Exception("Unknown message type: ", message_type)
-
-
 # Message Parser
 class MessageParser:
     """Parses messages sent from the Mega"""
@@ -116,9 +109,10 @@ class MessageParser:
             return False
 
         # trim message
-        message = message[1:message_length-2]
-        message = message.split()
-        arr = ast.literal_eval(message.rstrip('\r\n'))
+        message = message[1:message_length-2]  # Removes opening, closing bracket & \n
+        message_arr = message.split(",")
+        if len(message_arr) < 4:  # Shortest valid message: [23,P,0.2,0.3]
+            return False
 
 
 def encode_encrypt_message(message, key):
@@ -130,13 +124,9 @@ def encode_encrypt_message(message, key):
     cipher = AES.new(key.encode(), AES.MODE_CBC, iv)
     msg = base64.b64encode(iv + cipher.encrypt(padded_msg))
     return msg
-
-
 def format_results(action, voltage, current, power, cumulative_power):
     """Format results to: ‘#action | voltage | current | power | cumulativepower|’"""
     return '#' + action + '|' + str(voltage) + '|' + str(current) + '|' + str(power) + '|' + str(cumulative_power) + '|'
-
-
 def fetch_script_arguments():
     """Fetches command line arguments, all are required"""
     parser = argparse.ArgumentParser()
@@ -147,8 +137,6 @@ def fetch_script_arguments():
                         , required=True)
     parser.add_argument('-l', '--logging_mode', help="Enables debug printing (debug/none)", required=True)
     return parser.parse_args()
-
-
 def interactive_mode(args):
     """Interactive mode intended for convenient testing"""
     while True:
@@ -196,9 +184,7 @@ def interactive_mode(args):
                 # Exit
                 elif mode == "E":
                     break
-
-
-def evaluation_mode(mega_client, server_client):
+def evaluation_mode(mega_client, server_client, pi_parser):
     # Loop Vars
     connection_unstable = True
     wrong_format_count = 0
@@ -210,7 +196,22 @@ def evaluation_mode(mega_client, server_client):
 
         # Reading state, based on frame length
         for i in range(frame_length):
-            message = mega_client.read_message()
+            # Read message
+            try:
+                message = pi_parser.parse(mega_client.read_message())
+            except Exception as error:
+                logging.debug(repr(error))
+                if fail_fast:
+                    sys.exit()
+                else:
+                    connection_unstable = True
+                    break
+            if connection_unstable:
+                continue #  Return to handshake
+
+
+
+
 
 
         #
@@ -233,4 +234,5 @@ if __name__ == "__main__":
     elif mode == "2":
         server_client = RpiEvalServerClient(args.target_ip, args.target_port, args.key)
         mega_client = RpiMegaClient(baudrate=args.baud_rate)
-        evaluation_mode(mega_client, server_client)
+        pi_parser = MessageParser()
+        evaluation_mode(mega_client, server_client, pi_parser)
