@@ -30,10 +30,10 @@ class RpiMegaClient:
                 logging.info("Serial port already open")
             else:
                 self.port.open()
-                logging.info("Successfully opened serial port:", terminal, "w/ baud rate:", baudrate)
+                logging.info("Successfully opened serial port:" + terminal + "w/ baud rate:" + baudrate)
         except serial.SerialException as e1:
-            logging.debug("Error occurred attempting to open Serial port on ", terminal, str(baudrate), str(baudrate))
-            logging.debug("System error details:\n", str(e1))
+            logging.debug("Error occurred attempting to open Serial port on " + terminal + str(baudrate) + str(baudrate))
+            logging.debug("System error details:\n" + str(e1))
             if fail_fast:
                 sys.exit()
 
@@ -300,9 +300,9 @@ def evaluation_mode(mega_client, server_client):
                         mega_client.three_way_handshake()
                 else:
                     # Acknowledge the message
-                    logging.debug("Message No:", message.serial_number, "received")
+                    logging.debug("Message No:" + message.serial_number + "received")
                     mega_client.send_message("A," + str(message.serial_number) + "\n")
-                    logging.debug("Acknowledgement of message no:", message.serial_number, "sent")
+                    logging.debug("Acknowledgement of message no:" + message.serial_number + "sent")
                     # Add readings set to buffer
                     if message.type == MessageType.MOVEMENT:
                         data_buffer.append(message.readings)
