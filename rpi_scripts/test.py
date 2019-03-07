@@ -141,7 +141,7 @@ class MessageParser:
     @staticmethod
     def parse(message_string):
         if MessageParser.validity_check(message_string):
-            message_type = message_string[GeneralMessageIndex.MESSAGE_TYPE]
+            message_type = message_string[GeneralMessageIndex.MESSAGE_TYPE.value]
             # Reference message: "[SN,T,....,CS]\n"
             message_readings = message_string[1:len(message_string)-2].split(",")
             serial_number = int(message_readings[0])
@@ -165,15 +165,15 @@ class MessageParser:
             logging.debug("Short message error")
             return False
         # Unknown type check
-        message_type = message_arr[GeneralMessageIndex.MESSAGE_TYPE]
-        if  message_type not in [MessageType.MOVEMENT, MessageType.POWER]:
+        message_type = message_arr[GeneralMessageIndex.MESSAGE_TYPE.value]
+        if message_type not in [MessageType.MOVEMENT.value, MessageType.POWER.value]:
             logging.debug("Invalid message type error")
             return False
         # Number of elements check
-        if message_type == MessageType.MOVEMENT and len(message_arr) != 15:
+        if message_type == MessageType.MOVEMENT.value and len(message_arr) != 15:
             logging.debug("Incorrect number of elements error (movement message)")
             return False
-        if message_type == MessageType.POWER and len(message_arr) != 5:
+        if message_type == MessageType.POWER.value and len(message_arr) != 5:
             logging.debug("Incorrect number of elements error (power message)")
             return False
         # Checksum validation
@@ -221,7 +221,7 @@ def interactive_mode(args):
         mode = input()
 
         # Socket communication to Server
-        if mode == InteractiveModeIndex.SERVER_COMMS:
+        if mode == InteractiveModeIndex.SERVER_COMMS.value:
             server_client = RpiEvalServerClient(args.target_ip, args.target_port, args.key)
             print("Relay password to sever:", server_client.key, ", and wait for move prompt on GUI")
             while True:
@@ -233,7 +233,7 @@ def interactive_mode(args):
                     server_client.send_message(format_results(*message.split()))
 
         # Serial communication to Mega
-        elif mode == InteractiveModeIndex.MEGA_COMMS:
+        elif mode == InteractiveModeIndex.MEGA_COMMS.value:
             mega_client = RpiMegaClient(baudrate=args.baud_rate)
             while True:
                 print("Functionality to test: (1)Send 1 message, (2)Repeat read & print, (3)3-way-Handshake, (E)exit")
@@ -262,7 +262,7 @@ def interactive_mode(args):
                 elif mode == "E":
                     break
         # TODO ML INTERACTIVE MODE w/ training loops
-        elif mode == InteractiveModeIndex.ML:
+        elif mode == InteractiveModeIndex.ML.value:
             pass
 
 
@@ -309,7 +309,7 @@ def evaluation_mode(mega_client, server_client):
                     else:
                         move_power_readings = message.readings
             # Generate candidate predictions from frame data
-            candidate_action = "cowboy" # TODO ML call to replace dummy assignment!!!!
+            candidate_action = "cowboy"  # TODO ML call to replace dummy assignment!!!!
             candidates.append(candidate_action)
             candidates_generated += 1
             # Partial clear of frame buffer based on overlap
@@ -322,16 +322,16 @@ def evaluation_mode(mega_client, server_client):
                     move_time_ellapsed = move_end_time - move_start_time
                     total_time_ellapsed = move_end_time - evaluation_start_time
                     # TODO Here we assume move power readings have been read; write mechanism to detect otherwise
-                    current_power = float(move_power_readings[PowerMessageIndex.VOLTAGE]) *\
-                        float(move_power_readings[PowerMessageIndex.CURRENT])
+                    current_power = float(move_power_readings[PowerMessageIndex.VOLTAGE.value]) *\
+                        float(move_power_readings[PowerMessageIndex.CURRENT.value])
                     cumulative_power = current_power \
                         if cumulative_power == 0.0\
                         else (((cumulative_power * total_time_ellapsed) +
                                (current_power * move_time_ellapsed))/total_time_ellapsed)
 
                     # Sending result
-                    voltage = float(move_power_readings[PowerMessageIndex.VOLTAGE])
-                    current = float(move_power_readings[PowerMessageIndex.CURRENT])
+                    voltage = float(move_power_readings[PowerMessageIndex.VOLTAGE.value])
+                    current = float(move_power_readings[PowerMessageIndex.CURRENT.value])
                     server_client.send_message(format_results(action=candidates[0] if candidates[0] == candidates[1]
                                                               else (candidates[0] if candidates[0] == candidates[2]
                                                                     else candidates[1])),
