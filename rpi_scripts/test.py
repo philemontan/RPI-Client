@@ -17,8 +17,9 @@ fail_fast = False  # No error recovery if true. System exits immediately on exce
 
 candidates_required = 3
 frame_length = 50  # 1 frame per prediction
-sampling_interval = 0.02  # frames per second: frame_length / (1 / sampling interval) ==> 1 frame per second
+sampling_interval = 0.02  # frames per second = frame_length / (1 / sampling interval) ==> 1 frame per second
 overlap_ratio = 0.5
+
 
 # Client for Mega communications
 class RpiMegaClient:
@@ -59,6 +60,8 @@ class RpiMegaClient:
                 logging.info("Buffer flushed")
                 logging.info("Handshake complete")
                 break
+
+
 # Client for Server communication
 class RpiEvalServerClient:
     """Opens connection to remote host socket, provides a send API"""
@@ -84,13 +87,19 @@ class RpiEvalServerClient:
     def send_message(self, message):
         # No error detection/handling implemented for now
         self.sock.sendall(encode_encrypt_message(message, self.key))
-# Message Types
+
+
+# Enums
 class MessageType(Enum):
     MOVEMENT = "M"
     POWER = "P"
+
+
 class GeneralMessageIndex(Enum):
     MESSAGE_NUMBER = 0
     MESSAGE_TYPE = 1
+
+
 class MovementMessageIndex(Enum):
     LEFT_ACCEL_X = 3
     LEFT_ACCEL_Y = 4
@@ -105,34 +114,52 @@ class MovementMessageIndex(Enum):
     RIGHT_GYRO_Y = 13
     RIGHT_GYRO_Z = 14
     CHECKSUM = 15
+
+
 class PowerMessageIndex(Enum):
     VOLTAGE = 2
     CURRENT = 3
     CHECKSUM = 4
+
+
+class InteractiveModeIndex(Enum):
+    SERVER_COMMS = "1"
+    MEGA_COMMS = "2"
+    ML = "3"
+
+
 class Message:
-    def __init__(self, message_type, readings):
+    def __init__(self, serial_number, message_type, readings):
+        self.serial_number = serial_number
         self.type = message_type
         self.readings = readings  # list of 12 values in the order: left accel, gyro, right accel ,gyro
+
 
 # Message Parser
 class MessageParser:
     """Parses readings messages sent from the Mega, not intended for general message parsing"""
     @staticmethod
-    def parse(message):
-        if MessageParser.validity_check(message):
-            return Message(MessageType.POWER, [])
+    def parse(message_string):
+        if MessageParser.validity_check(message_string):
+            message_type = message_string[GeneralMessageIndex.MESSAGE_TYPE]
+            # Reference message: "[SN,T,....,CS]\n"
+            message_readings = message_string[1:len(message_string)-2].split(",")
+            serial_number = int(message_readings[0])
+            message_readings = [float(i) for i in (message_readings[2:len(message_readings)-1])]
+            return Message(serial_number, MessageType.MOVEMENT if message_type == MessageType.MOVEMENT
+                           else MessageType.POWER, message_readings)
         else:
-            raise Exception("Message validity check failed")
+            raise Exception("Message validity check failed, refer to log messages")
 
     @staticmethod
-    def validity_check(message):
-        message_length = len(message)
+    def validity_check(message_string):
+        message_length = len(message_string)
         # Sentinel framing check
-        if message[0] != '[' or message[message_length-1] != '\n' or message[message_length-2] != ']':
+        if message_string[0] != '[' or message_string[message_length-1] != '\n' or message_string[message_length-2] != ']':
             logging.debug("Sentinel framing error")
             return False
 
-        message_arr = message[1:message_length - 2].split(",")
+        message_arr = message_string[1:message_length - 2].split(",")
         # Quick length check
         if len(message_arr) < 5:  # Shortest valid message: [23,P,0.2,0.3,CHECKSUM]
             logging.debug("Short message error")
@@ -150,9 +177,13 @@ class MessageParser:
             logging.debug("Incorrect number of elements error (power message)")
             return False
         # Checksum validation
-        checksum = bytes(1)
-        for string in message_arr:
-            checksum = string ^ checksum
+        for i, c in enumerate(message_string[1:len(message_string)-3]): # checksum itself removed from the string
+            checksum = ord(c) if i == 0 else (checksum ^ ord(c))
+        if checksum != ord(message_string[len(message_string)-3]):
+            logging.debug("Checksum error")
+            return False
+
+        return True
 
 
 def encode_encrypt_message(message, key):
@@ -190,7 +221,7 @@ def interactive_mode(args):
         mode = input()
 
         # Socket communication to Server
-        if mode == "1":
+        if mode == InteractiveModeIndex.SERVER_COMMS:
             server_client = RpiEvalServerClient(args.target_ip, args.target_port, args.key)
             print("Relay password to sever:", server_client.key, ", and wait for move prompt on GUI")
             while True:
@@ -202,7 +233,7 @@ def interactive_mode(args):
                     server_client.send_message(format_results(*message.split()))
 
         # Serial communication to Mega
-        elif mode == "2":
+        elif mode == InteractiveModeIndex.MEGA_COMMS:
             mega_client = RpiMegaClient(baudrate=args.baud_rate)
             while True:
                 print("Functionality to test: (1)Send 1 message, (2)Repeat read & print, (3)3-way-Handshake, (E)exit")
@@ -230,12 +261,15 @@ def interactive_mode(args):
                 # Exit
                 elif mode == "E":
                     break
+        # TODO ML INTERACTIVE MODE w/ training loops
+        elif mode == InteractiveModeIndex.ML:
+            pass
 
 
 def evaluation_mode(mega_client, server_client):
     # Loop Vars
     cumulative_power = 0.0
-    cumulative_run_time = 0.0
+    evaluation_start_time = int(time.time())
 
     # (Blocking)Initial Handshake
     mega_client.three_way_handshake()
@@ -253,6 +287,7 @@ def evaluation_mode(mega_client, server_client):
             # Frame filling
             while len(data_buffer) < frame_length:
                 try:
+                    time.sleep(sampling_interval)
                     message = MessageParser.parse(mega_client.read_message())
                 except Exception as err:
                     logging.debug(repr(err))
@@ -264,31 +299,52 @@ def evaluation_mode(mega_client, server_client):
                         data_buffer.clear()
                         mega_client.three_way_handshake()
                 else:
+                    # Acknowledge the message
+                    logging.debug("Message No:", message.serial_number, "received")
+                    mega_client.send_message("A," + str(message.serial_number) + "\n")
+                    logging.debug("Acknowledgement of message no:", message.serial_number, "sent")
+                    # Add readings set to buffer
                     if message.type == MessageType.MOVEMENT:
                         data_buffer.append(message.readings)
                     else:
                         move_power_readings = message.readings
             # Generate candidate predictions from frame data
-            candidate_action = "cowboy" # dummy, pend ML integration!!!!
+            candidate_action = "cowboy" # TODO ML call to replace dummy assignment!!!!
             candidates.append(candidate_action)
             candidates_generated += 1
             # Partial clear of frame buffer based on overlap
-            data_buffer = data_buffer[25:]
+            data_buffer = data_buffer[int(frame_length*(1-overlap_ratio)):]
             if candidates_generated == 3:
                 # Acceptable result generated
                 if candidates[0] == candidates[1] or candidates[0] == candidates[2] or candidates[1] == candidates[2]:
-                    server_client.send_message(format_results(action=,
-                                                          voltage=move_power_readings[PowerMessageIndex.VOLTAGE],
-                                                          current=move_power_readings[PowerMessageIndex.CURRENT],
-                                                          power=,
-                                                          cumulative_power=cumulative_power))
+                    # Power calculations
+                    move_end_time = int(time.time())
+                    move_time_ellapsed = move_end_time - move_start_time
+                    total_time_ellapsed = move_end_time - evaluation_start_time
+                    # TODO Here we assume move power readings have been read; write mechanism to detect otherwise
+                    current_power = float(move_power_readings[PowerMessageIndex.VOLTAGE]) *\
+                        float(move_power_readings[PowerMessageIndex.CURRENT])
+                    cumulative_power = current_power \
+                        if cumulative_power == 0.0\
+                        else (((cumulative_power * total_time_ellapsed) +
+                               (current_power * move_time_ellapsed))/total_time_ellapsed)
+
+                    # Sending result
+                    voltage = float(move_power_readings[PowerMessageIndex.VOLTAGE])
+                    current = float(move_power_readings[PowerMessageIndex.CURRENT])
+                    server_client.send_message(format_results(action=candidates[0] if candidates[0] == candidates[1]
+                                                              else (candidates[0] if candidates[0] == candidates[2]
+                                                                    else candidates[1])),
+                                               voltage=voltage,
+                                               current=current,
+                                               power=current_power,
+                                               cumulative_power=cumulative_power)
+                    move_power_readings = []  # Clear power readings
+
                 # Unacceptable results, all 3 candidates differ; dump the first 2
                 else:
                     candidates_generated -= 2
-                    data_buffer = data_buffer[2:]
-
-
-
+                    candidates = candidates[2:]
 
 
 if __name__ == "__main__":
