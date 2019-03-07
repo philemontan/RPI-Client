@@ -15,6 +15,7 @@ from Crypto import Random
 #Global Flags
 fail_fast = False  # No error recovery if true. System exits immediately on exception.
 
+candidates_required = 3
 frame_length = 50  # 1 frame per prediction
 sampling_interval = 0.02  # frames per second: frame_length / (1 / sampling interval) ==> 1 frame per second
 overlap_ratio = 0.5
@@ -111,7 +112,7 @@ class PowerMessageIndex(Enum):
 class Message:
     def __init__(self, message_type, readings):
         self.type = message_type
-        self.readings = readings
+        self.readings = readings  # list of 12 values in the order: left accel, gyro, right accel ,gyro
 
 # Message Parser
 class MessageParser:
@@ -233,29 +234,60 @@ def interactive_mode(args):
 
 def evaluation_mode(mega_client, server_client):
     # Loop Vars
-    data_buffer = []
     cumulative_power = 0.0
+    cumulative_run_time = 0.0
 
     # (Blocking)Initial Handshake
     mega_client.three_way_handshake()
 
     # Generate unlimited predictions
     while True:
+        candidates_generated = 0
         error_count = 0
+        move_start_time = int(time.time()) # 1-second precision of seconds since epoch
+        candidates = []
+        data_buffer = []
 
-        # Per-prediction data read
-        while len(data_buffer) < frame_length:
-            try:
-                message = MessageParser.parse(mega_client.read_message())
-            except Exception as err:
-                logging.debug(repr(err))
-                if fail_fast:
-                    sys.exit()
-                error_count += 1
-                if error_count == 3:
-                    data_buffer.clear()
-                    mega_client.three_way_handshake()
-            else:
+        # Per prediction loop
+        while candidates_generated != 3:
+            # Frame filling
+            while len(data_buffer) < frame_length:
+                try:
+                    message = MessageParser.parse(mega_client.read_message())
+                except Exception as err:
+                    logging.debug(repr(err))
+                    if fail_fast:
+                        sys.exit()
+                    error_count += 1
+                    if error_count == 3:
+                        error_count = 0
+                        data_buffer.clear()
+                        mega_client.three_way_handshake()
+                else:
+                    if message.type == MessageType.MOVEMENT:
+                        data_buffer.append(message.readings)
+                    else:
+                        move_power_readings = message.readings
+            # Generate candidate predictions from frame data
+            candidate_action = "cowboy" # dummy, pend ML integration!!!!
+            candidates.append(candidate_action)
+            candidates_generated += 1
+            # Partial clear of frame buffer based on overlap
+            data_buffer = data_buffer[25:]
+            if candidates_generated == 3:
+                # Acceptable result generated
+                if candidates[0] == candidates[1] or candidates[0] == candidates[2] or candidates[1] == candidates[2]:
+                    server_client.send_message(format_results(action=,
+                                                          voltage=move_power_readings[PowerMessageIndex.VOLTAGE],
+                                                          current=move_power_readings[PowerMessageIndex.CURRENT],
+                                                          power=,
+                                                          cumulative_power=cumulative_power))
+                # Unacceptable results, all 3 candidates differ; dump the first 2
+                else:
+                    candidates_generated -= 2
+                    data_buffer = data_buffer[2:]
+
+
 
 
 
