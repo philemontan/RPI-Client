@@ -274,11 +274,18 @@ def evaluation_mode(mega_client, server_client):
     # (Blocking)Initial Handshake
     mega_client.three_way_handshake()
 
+    # Pause; Wait for server to present challenge move
+    print("Wait for server to prompt the first challenge move, then press any key to begin.")
+    input()
+
     # Generate unlimited predictions
     while True:
+        time.sleep(0.5)  # human reaction time
+        mega_client.port.reset_input_buffer()  # flush input
+
         candidates_generated = 0
         error_count = 0
-        move_start_time = int(time.time()) # 1-second precision of seconds since epoch
+        move_start_time = int(time.time())  # 1-second precision of seconds since epoch
         candidates = []
         data_buffer = []
 
@@ -299,10 +306,12 @@ def evaluation_mode(mega_client, server_client):
                         data_buffer.clear()
                         mega_client.three_way_handshake()
                 else:
+                    error_count = 0
                     # Acknowledge the message
                     logging.debug("Message No:" + message.serial_number + "received")
                     mega_client.send_message("A," + str(message.serial_number) + "\n")
                     logging.debug("Acknowledgement of message no:" + message.serial_number + "sent")
+                    logging.info("m:" + message.serial_number + "(" + message.type.value + ")=" + str(message.readings))
                     # Add readings set to buffer
                     if message.type == MessageType.MOVEMENT:
                         data_buffer.append(message.readings)
@@ -310,6 +319,7 @@ def evaluation_mode(mega_client, server_client):
                         move_power_readings = message.readings
             # Generate candidate predictions from frame data
             candidate_action = "cowboy"  # TODO ML call to replace dummy assignment!!!!
+            logging.info("Frame completed. Generated candidate:" + candidate_action)
             candidates.append(candidate_action)
             candidates_generated += 1
             # Partial clear of frame buffer based on overlap
@@ -322,29 +332,31 @@ def evaluation_mode(mega_client, server_client):
                     move_time_ellapsed = move_end_time - move_start_time
                     total_time_ellapsed = move_end_time - evaluation_start_time
                     # TODO Here we assume move power readings have been read; write mechanism to detect otherwise
-                    current_power = float(move_power_readings[PowerMessageIndex.VOLTAGE.value]) *\
-                        float(move_power_readings[PowerMessageIndex.CURRENT.value])
+                    current_power = move_power_readings[0] *\
+                        move_power_readings[1]
                     cumulative_power = current_power \
                         if cumulative_power == 0.0\
                         else (((cumulative_power * total_time_ellapsed) +
                                (current_power * move_time_ellapsed))/total_time_ellapsed)
 
                     # Sending result
-                    voltage = float(move_power_readings[PowerMessageIndex.VOLTAGE.value])
-                    current = float(move_power_readings[PowerMessageIndex.CURRENT.value])
-                    server_client.send_message(format_results(action=candidates[0] if candidates[0] == candidates[1]
-                                                              else (candidates[0] if candidates[0] == candidates[2]
-                                                                    else candidates[1])),
-                                               voltage=voltage,
-                                               current=current,
-                                               power=current_power,
-                                               cumulative_power=cumulative_power)
+                    voltage = move_power_readings[0]
+                    current = move_power_readings[1]
+                    result_string = format_results(action=candidates[0] if candidates[0] == candidates[1]
+                                                   else (candidates[0] if candidates[0] == candidates[2]
+                                                         else candidates[1]),
+                                                   voltage=voltage, current=current, power=current_power,
+                                                   cumulative_power=cumulative_power)
+                    server_client.send_message(result_string)
                     move_power_readings = []  # Clear power readings
+                    logging.info("At least 2/3 candidates matched. Prediction accepted.")
+                    logging.info("Result sent to server: " + result_string)
 
                 # Unacceptable results, all 3 candidates differ; dump the first 2
                 else:
                     candidates_generated -= 2
                     candidates = candidates[2:]
+                    logging.info("No match between all 3 candidates. Re-attempting move.")
 
 
 if __name__ == "__main__":
