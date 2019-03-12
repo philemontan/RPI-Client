@@ -42,7 +42,10 @@ class RpiMegaClient:
         return message
 
     def read_message(self):
-        return self.port.read_until().decode("utf-8")  #\n is not removed
+        return self.port.read_until().decode("utf-8")  # \n is not removed
+
+    def discard_till_sentinel(self):
+        self.port.read_until()  # Discards first chunk till \n, bare read may fail on decode
 
     def three_way_handshake(self):
         while True:
@@ -142,14 +145,19 @@ class MessageParser:
     def parse(message_string):
         if MessageParser.validity_check(message_string):
             message_type = message_string[GeneralMessageIndex.MESSAGE_TYPE.value]
+
             # Reference message: "[SN,T,....,CS]\n"
+
+            # Remove: []\n, fill list of string
             message_readings = message_string[1:len(message_string)-2].split(",")
             serial_number = int(message_readings[0])
+
+            # Remove Serial Number, Type, Checksum, convert remaining strings to float
             message_readings = [float(i) for i in (message_readings[2:len(message_readings)-1])]
             return Message(serial_number, MessageType.MOVEMENT if message_type == MessageType.MOVEMENT
                            else MessageType.POWER, message_readings)
         else:
-            raise Exception("Message validity check failed, refer to log messages")
+            raise Exception("Message validity check failed. Received: " + message_string)
 
     @staticmethod
     def validity_check(message_string):
@@ -278,23 +286,31 @@ def evaluation_mode(mega_client, server_client):
     print("Wait for server to prompt the first challenge move, then press any key to begin.")
     input()
 
+    # Inform Mega to start sending data
+    mega_client.send_message("S")
+
     # Generate unlimited predictions
     while True:
         time.sleep(0.5)  # human reaction time
         mega_client.port.reset_input_buffer()  # flush input
+        mega_client.discard_till_sentinel()  # flush is likely to cut off a message
 
+        # Per result loop vars
         candidates_generated = 0
         error_count = 0
         move_start_time = int(time.time())  # 1-second precision of seconds since epoch
         candidates = []
         data_buffer = []
 
-        # Per prediction loop
+        # Per prediction loop -- 3 predictions for 1 result
         while candidates_generated != 3:
-            # Frame filling
+
+            # Fill frame
             while len(data_buffer) < frame_length:
                 try:
                     time.sleep(sampling_interval)
+                    mega_client.port.reset_input_buffer()  # flush input
+                    mega_client.discard_till_sentinel()  # flush is likely to cut off a message
                     message = MessageParser.parse(mega_client.read_message())
                 except Exception as err:
                     logging.debug(repr(err))
@@ -316,17 +332,25 @@ def evaluation_mode(mega_client, server_client):
                     if message.type == MessageType.MOVEMENT:
                         data_buffer.append(message.readings)
                     else:
-                        move_power_readings = message.readings
-            # Generate candidate predictions from frame data
+                        move_power_readings = message.readings  # We only store 1 power reading set per move
+
+            # Frame full; Generate candidate prediction from frame data
             candidate_action = "cowboy"  # TODO ML call to replace dummy assignment!!!!
             logging.info("Frame completed. Generated candidate:" + candidate_action)
             candidates.append(candidate_action)
             candidates_generated += 1
+
             # Partial clear of frame buffer based on overlap
             data_buffer = data_buffer[int(frame_length*(1-overlap_ratio)):]
+
             if candidates_generated == 3:
-                # Acceptable result generated
-                if candidates[0] == candidates[1] or candidates[0] == candidates[2] or candidates[1] == candidates[2]:
+                # Match predictions
+                match_0_1 = candidates[0] == candidates[1]
+                match_0_2 = candidates[0] == candidates[2]
+                match_1_2 = candidates[1] == candidates[2]
+
+                # Check for 2/3
+                if match_0_1 or match_0_2 or match_1_2:
                     # Power calculations
                     move_end_time = int(time.time())
                     move_time_ellapsed = move_end_time - move_start_time
@@ -342,9 +366,8 @@ def evaluation_mode(mega_client, server_client):
                     # Sending result
                     voltage = move_power_readings[0]
                     current = move_power_readings[1]
-                    result_string = format_results(action=candidates[0] if candidates[0] == candidates[1]
-                                                   else (candidates[0] if candidates[0] == candidates[2]
-                                                         else candidates[1]),
+                    result_string = format_results(action=candidates[0] if (match_0_1 or match_0_2)
+                                                   else candidates[1],
                                                    voltage=voltage, current=current, power=current_power,
                                                    cumulative_power=cumulative_power)
                     server_client.send_message(result_string)
