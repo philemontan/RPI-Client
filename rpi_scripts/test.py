@@ -11,6 +11,7 @@ import base64
 import time
 from Crypto.Cipher import AES
 from Crypto import Random
+import numpy
 
 #Global Flags
 fail_fast = False  # No error recovery if true. System exits immediately on exception.
@@ -19,6 +20,16 @@ candidates_required = 3
 frame_length = 50  # 1 frame per prediction
 sampling_interval = 0.02  # frames per second = frame_length / (1 / sampling interval) ==> 1 frame per second
 overlap_ratio = 0.5
+
+
+# Client for ML prediction, training data generation
+class RpiMLClient:
+    def __init__(self):
+        pass
+
+    # Expects frame as a list of lists, 50 rows, 12 cols
+    def predict(self, frame):
+        return "cowboy"
 
 
 # Client for Mega communications
@@ -65,6 +76,7 @@ class RpiMegaClient:
                 break
 
 
+
 # Client for Server communication
 class RpiEvalServerClient:
     """Opens connection to remote host socket, provides a send API"""
@@ -93,6 +105,21 @@ class RpiEvalServerClient:
 
 
 # Enums
+class Move(Enum):
+    FINAL = 0
+    HUNCHBACK = 1
+    RAFFLES = 2
+    CHICKEN = 3
+    CRAB = 4
+    COWBOY = 5
+    RUNNINGMAN = 6
+    JAMESBOND = 7
+    SNAKE = 8
+    DOUBLEPUMP = 9
+    MERMAID = 10
+
+
+
 class MessageType(Enum):
     MOVEMENT = "M"
     POWER = "P"
@@ -133,9 +160,9 @@ class InteractiveModeIndex(Enum):
 
 class Message:
     def __init__(self, serial_number, message_type, readings):
-        self.serial_number = serial_number
-        self.type = message_type
-        self.readings = readings  # list of 12 values in the order: left accel, gyro, right accel ,gyro
+        self.serial_number = serial_number  # String Type
+        self.type = message_type  # Enum Type
+        self.readings = readings  # List of floats in the order: left accel, gyro, right accel ,gyro; x,y,z
 
 
 # Message Parser
@@ -150,7 +177,7 @@ class MessageParser:
 
             # Remove: []\n, fill list of string
             message_readings = message_string[1:len(message_string)-2].split(",")
-            serial_number = int(message_readings[0])
+            serial_number = message_readings[0]
 
             # Remove Serial Number, Type, Checksum, convert remaining strings to float
             message_readings = [float(i) for i in (message_readings[2:len(message_readings)-1])]
@@ -269,12 +296,91 @@ def interactive_mode(args):
                 # Exit
                 elif mode == "E":
                     break
+
         # TODO ML INTERACTIVE MODE w/ training loops
         elif mode == InteractiveModeIndex.ML.value:
-            pass
+            mega_client = RpiMegaClient(baudrate=args.baud_rate)
+
+            # Prompt training parameters
+            print("5 moves mode to be trained: (1)Hunchback, (2)Raffles, (3)Chicken, (4)Crab, (5)Cowboy\nExpect 1"
+                  "second of dancing per frame")
+            print("Enter training parameters: number of people, frames to collect per move")
+            params = [int(i) for i in input().split()]
+            num_people = params[0]
+            frames_per_move = params[1]
+            print("Expect " + str(int((5*frames_per_move)/60)) + " minutes " + str(int((5*frames_per_move) % 60))
+                  + " seconds of dancing per person")
+
+            # Persistence setup
+            time_str = str(int(time.time()))
+            training_data = [[], [], [], [], [], []]  # [move_num][frame_num][data_point_num][sensor_readings_index]
+            data_buffer = []  # list of reading sets
+
+            # Training loop
+            error_count = 0
+            # One iteration one person
+            for i in range(num_people):
+                # One iteration one move
+                for j in range(6):  # 5 moves +  End Move; Order: Final, Hunchback, Raffles, Chicken, Crab, Cowboy
+                    print("Person", i, "get ready to dance move:", Move(j+1).name)  # Note: enums start from 1
+                    print("Press any key to start dancing")
+                    input()
+                    if i == 0 and j == 0:
+                        mega_client.send_message("S")  # Inform mega to start sending data
+
+                    # Fill the data buffer; Note: frame_length, sampling_interval defined as global var
+                    current_number_of_frames = 0
+                    while current_number_of_frames < frames_per_move:
+                        # Fill frame
+                        while len(data_buffer) < frame_length:
+                            try:
+                                time.sleep(sampling_interval)
+                                mega_client.port.reset_input_buffer()  # flush input
+                                mega_client.discard_till_sentinel()  # flush is likely to cut off a message
+                                message = MessageParser.parse(mega_client.read_message())
+                            except Exception as err:
+                                logging.debug(repr(err))
+                                if fail_fast:
+                                    sys.exit()
+                                error_count += 1
+                                if error_count == 3:
+                                    error_count = 0
+                                    data_buffer.clear()
+                                    mega_client.three_way_handshake()
+                            else:
+                                error_count = 0
+                                # Acknowledge the message
+                                logging.debug("Message No:" + message.serial_number + "received")
+                                mega_client.send_message("A," + message.serial_number + "\n")
+                                logging.debug("Acknowledgement of message no:" + message.serial_number + "sent")
+                                logging.info(
+                                    "m:" + message.serial_number + "(" + message.type.value + ")=" + str(message.readings))
+                                # Add readings set to buffer
+                                if message.type == MessageType.MOVEMENT:
+                                    data_buffer.append(message.readings)
+                                else:
+                                    pass  # No need for power values
+                        current_number_of_frames += 1
+
+                        # Partial buffer flush based on overlap
+                        training_data[j].append(data_buffer.copy())  # training_data[0] should be empty
+                        data_buffer = data_buffer[int(frame_length*(1-overlap_ratio)):]
+
+            # Write data gathered to files
+            print("Data gathering complete")
+            for i in range(6):
+                print("Data collected for " + Move(i+1).name + ":")
+                for j in training_data[i]:
+                    print(str(j))
+                temp_arr = numpy.array(training_data[i].copy())
+                temp_file_name = "training_data/" + Move(i+1).name + "_" + time_str
+                numpy.save(temp_file_name, temp_arr)
+                print("Data saved in:" + temp_file_name)
 
 
-def evaluation_mode(mega_client, server_client):
+
+
+def evaluation_mode(mega_client, server_client, ml_client):
     # Loop Vars
     cumulative_power = 0.0
     evaluation_start_time = int(time.time())
@@ -325,7 +431,7 @@ def evaluation_mode(mega_client, server_client):
                     error_count = 0
                     # Acknowledge the message
                     logging.debug("Message No:" + message.serial_number + "received")
-                    mega_client.send_message("A," + str(message.serial_number) + "\n")
+                    mega_client.send_message("A," + message.serial_number + "\n")
                     logging.debug("Acknowledgement of message no:" + message.serial_number + "sent")
                     logging.info("m:" + message.serial_number + "(" + message.type.value + ")=" + str(message.readings))
                     # Add readings set to buffer
@@ -335,7 +441,7 @@ def evaluation_mode(mega_client, server_client):
                         move_power_readings = message.readings  # We only store 1 power reading set per move
 
             # Frame full; Generate candidate prediction from frame data
-            candidate_action = "cowboy"  # TODO ML call to replace dummy assignment!!!!
+            candidate_action = ml_client.predict(data_buffer)  # TODO this function call currently returns a dummy
             logging.info("Frame completed. Generated candidate:" + candidate_action)
             candidates.append(candidate_action)
             candidates_generated += 1
@@ -397,4 +503,5 @@ if __name__ == "__main__":
     elif mode == "2":
         server_client = RpiEvalServerClient(args.target_ip, args.target_port, args.key)
         mega_client = RpiMegaClient(baudrate=args.baud_rate)
-        evaluation_mode(mega_client, server_client)
+        ml_client = RpiMLClient()
+        evaluation_mode(mega_client, server_client, ml_client)
