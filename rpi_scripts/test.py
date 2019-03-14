@@ -76,7 +76,6 @@ class RpiMegaClient:
                 break
 
 
-
 # Client for Server communication
 class RpiEvalServerClient:
     """Opens connection to remote host socket, provides a send API"""
@@ -117,7 +116,6 @@ class Move(Enum):
     SNAKE = 8
     DOUBLEPUMP = 9
     MERMAID = 10
-
 
 
 class MessageType(Enum):
@@ -172,13 +170,13 @@ class MessageParser:
     def parse(message_string):
         message_string = message_string[1:]
         if MessageParser.validity_check(message_string):
-            print("validity check pass")
+            logging.info("Validity check success")
             message_type = message_string[GeneralMessageIndex.MESSAGE_TYPE.value]
 
             # Reference message: "[SN,T,....,CS]\n"
 
             # Remove: []\n, fill list of string
-            message_readings = message_string[1:len(message_string)-2].split(",")
+            message_readings = message_string[0:len(message_string)-2].split(",")  # TODO FIND OUT WHY GOT x00
             serial_number = message_readings[0]
             
             print("first rmeove pass")
@@ -196,52 +194,45 @@ class MessageParser:
     @staticmethod
     def validity_check(message_string):
         message_length = len(message_string)
-        print("entered validity check")
+        logging.info("Entered validity check")
         # String length check
         if len(message_string) < 6:
-            logging.debug("message received too short:" + message_string)
+            logging.debug("message received too short")
             return False
-        print("length check pass")
 
         # Sentinel framing check
         if message_string[0] != '[' or message_string[message_length-1] != '\n' or message_string[message_length-2] != ']':
             logging.debug("Sentinel framing error")
             return False
-        print("sentinel check pass")
 
         message_arr = message_string[1:message_length - 2].split(",")
         # Quick length check
         if len(message_arr) < 5:  # Shortest valid message: [23,P,0.2,0.3,CHECKSUM]
             logging.debug("Short message error")
             return False
-        print("short message pass")
 
         # Unknown type check
         message_type = message_arr[GeneralMessageIndex.MESSAGE_TYPE.value]
         if message_type not in [MessageType.MOVEMENT.value, MessageType.POWER.value]:
             logging.debug("Invalid message type error:" + message_type)
             return False
-        print("invalid message type pass")
 
         # Number of elements check
         if message_type == MessageType.MOVEMENT.value and len(message_arr) != 15:
             logging.debug("Incorrect number of elements error (movement message)")
             return False
-        print("incorrect number of elements error for movement pass")
 
         if message_type == MessageType.POWER.value and len(message_arr) != 5:
             logging.debug("Incorrect number of elements error (power message)")
             return False
-        print("incorrect number of elements error for power pass")
-
 
         # Checksum validation
-        #for i, c in enumerate(message_string[1:len(message_string)-3]): # checksum itself removed from the string
-        #    checksum = ord(c) if i == 0 else (checksum ^ ord(c))
-        #if checksum != ord(message_string[len(message_string)-3]):
-        #    logging.debug("Checksum error")
-        #    return False
-        #print("checksum pass")
+        for i, c in enumerate(message_string[1:len(message_string)-3]):  # checksum itself removed from the string
+            checksum = ord(c) if i == 0 else (checksum ^ ord(c))
+        if checksum != ord(message_string[len(message_string)-3]):
+            logging.debug("Checksum error-" + "Calulated:" + checksum)
+            return False
+        print("checksum pass")
 
         return True
 
@@ -404,8 +395,6 @@ def interactive_mode(args):
                 print("Data saved in:" + temp_file_name)
 
 
-
-
 def evaluation_mode(mega_client, server_client, ml_client):
     # Loop Vars
     cumulative_power = 0.0
@@ -456,8 +445,8 @@ def evaluation_mode(mega_client, server_client, ml_client):
                 else:
                     error_count = 0
                     # Acknowledge the message
-                    logging.debug("Message No:" + message.serial_number + "received")
-                    #mega_client.send_message("A," + message.serial_number + "\n")
+                    #mega_client.send_message("A," + message.serial_number + "\n")  # TODO reinstate ACK later
+
                     #logging.debug("Acknowledgement of message no:" + message.serial_number + "sent")
                     logging.info("m:" + message.serial_number + "(" + message.type.value + ")=" + str(message.readings))
                     # Add readings set to buffer
