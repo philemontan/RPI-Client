@@ -17,7 +17,7 @@ import numpy
 fail_fast = True  # No error recovery if true. System exits immediately on exception.
 
 candidates_required = 3
-frame_length = 50  # 1 frame per prediction
+frame_length = 10  # 1 frame per prediction
 sampling_interval = 0.02  # frames per second = frame_length / (1 / sampling interval) ==> 1 frame per second
 overlap_ratio = 0.5
 
@@ -181,7 +181,7 @@ class MessageParser:
             message_type = message_readings[GeneralMessageIndex.MESSAGE_TYPE.value]
 
             # Remove Serial Number, Type, Checksum, convert remaining strings to float
-            message_readings = [format(float(i), '.2f') for i in (message_readings[2:len(message_readings)-1])]  # TODO make sure all are 2dp
+            message_readings = [float(i) for i in (message_readings[2:len(message_readings)-1])]  # TODO make sure all are 2dp
 
             return Message(serial_number, MessageType.MOVEMENT if message_type == MessageType.MOVEMENT.value
                            else MessageType.POWER, message_readings)
@@ -488,8 +488,9 @@ def evaluation_mode(mega_client, server_client, ml_client):
                     current = move_power_readings[1]
                     result_string = format_results(action=candidates[0] if (match_0_1 or match_0_2)
                                                    else candidates[1],
-                                                   voltage=voltage, current=current, power=current_power,
-                                                   cumulative_power=cumulative_power)
+                                                   voltage=format(voltage, ".2f"), current=format(current, ".2f"),
+                                                   power=format(current_power, ".2f"),
+                                                   cumulative_power=format(cumulative_power, ".2f"))
                     server_client.send_message(result_string)
                     move_power_readings = []  # Clear power readings
                     logging.info("Prediction accepted. Matched candidates >= 2/3")
