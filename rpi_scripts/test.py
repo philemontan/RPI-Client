@@ -176,7 +176,7 @@ class MessageParser:
             # Reference message: "[SN,T,....,CS]\n"
 
             # Remove: []\n, fill list of string
-            message_readings = message_string[0:len(message_string)-2].split(",")
+            message_readings = message_string[1:len(message_string)-2].split(",")
             serial_number = message_readings[0]
 
             # Remove Serial Number, Type, Checksum, convert remaining strings to float
