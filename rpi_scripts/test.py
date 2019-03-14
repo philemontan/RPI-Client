@@ -339,6 +339,9 @@ def interactive_mode(args):
             training_data = [[], [], [], [], [], []]  # [move_num][frame_num][data_point_num][sensor_readings_index]
             data_buffer = []  # list of reading sets
 
+            # Handshake
+            mega_client.three_way_handshake()
+
             # Training loop
             error_count = 0
             # One iteration one person
@@ -387,6 +390,7 @@ def interactive_mode(args):
                         # Partial buffer flush based on overlap
                         training_data[j].append(data_buffer.copy())  # training_data[0] should be empty
                         data_buffer = data_buffer[int(frame_length*(1-overlap_ratio)):]
+                    data_buffer.clear()  # Full buffer flush before next move
 
             # Write data gathered to files
             print("Data gathering complete")
