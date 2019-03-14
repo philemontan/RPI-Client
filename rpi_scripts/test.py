@@ -9,6 +9,7 @@ import serial
 import socket
 import base64
 import time
+import datetime
 from Crypto.Cipher import AES
 from Crypto import Random
 import numpy
@@ -320,13 +321,18 @@ def interactive_mode(args):
 
             # Prompt training parameters
             print("5 moves mode to be trained: (1)Hunchback, (2)Raffles, (3)Chicken, (4)Crab, (5)Cowboy\nExpect 1"
-                  "second of dancing per frame")
-            print("Enter training parameters: number of people, frames to collect per move")
+                  "second of dancing per data point")
+            print("Enter training parameters: number of people, frames to collect per move, frame length")
+            global frame_length
             params = [int(i) for i in input().split()]
             num_people = params[0]
             frames_per_move = params[1]
-            print("Expect " + str(int((5*frames_per_move)/60)) + " minutes " + str(int((5*frames_per_move) % 60))
-                  + " seconds of dancing per person")
+            if frame_length != params[2]:
+                print("Warning! Overwriting default global frame length of", frame_length, "with", params[2])
+                frame_length = params[2]
+
+            print("Expect " + str(int((5*frames_per_move*frame_length)/60)) + " minutes "
+                  + str(int((5*frames_per_move*frame_length) % 60)) + " seconds of dancing per person")
 
             # Persistence setup
             time_str = str(int(time.time()))
@@ -389,7 +395,11 @@ def interactive_mode(args):
                 for j in training_data[i]:
                     print(str(j))
                 temp_arr = numpy.array(training_data[i].copy())
-                temp_file_name = "training_data/" + Move(i+1).name + "_" + time_str
+                current_date = datetime.date.today()
+                timestamp =  str(current_date.day) + "-" + str(current_date.month) + "-" + str(current_date.year)[2:] \
+                    + "-" + time_str[5:]
+                temp_file_name = "training_data/" + timestamp + "_" + Move(i+1).name + "_" + "P" + str(num_people) \
+                    + "F" + str(frames_per_move) + "FL" + str(frame_length)
                 numpy.save(temp_file_name, temp_arr)
                 print("Data saved in:" + temp_file_name)
 
