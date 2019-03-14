@@ -172,7 +172,7 @@ class MessageParser:
         if MessageParser.validity_check(message_string):
             logging.info("Validity check success")
             message_type = message_string[GeneralMessageIndex.MESSAGE_TYPE.value]
-
+            print("parsed message type:", message_type)
             # Reference message: "[SN,T,....,CS]\n"
 
             # Remove: []\n, fill list of string
@@ -209,6 +209,7 @@ class MessageParser:
         logging.debug("elements pass")
         # Unknown type check
         message_type = message_arr[GeneralMessageIndex.MESSAGE_TYPE.value]
+        print("validity check message type:", message_type)
         if message_type not in [MessageType.MOVEMENT.value, MessageType.POWER.value]:
             logging.debug("Invalid message type error:" + message_type)
             return False
@@ -225,15 +226,15 @@ class MessageParser:
         # Checksum validation
         end_index = len(message_string) - 5 if message_string[len(message_string) - 5] == ',' \
             else len(message_string) - 4
-        logging.info("end index calculated:" + str(end_index) + " msg length:" + str(len(message_string)))
+        #logging.info("end index calculated:" + str(end_index) + " msg length:" + str(len(message_string)))
         for i, c in enumerate(message_string[0:end_index]):  # checksum itself removed from the string
             checksum = ord(c) if i == 0 else (checksum ^ ord(c))
         message_arr = message_string[0:len(message_string)-2].split(',')
 
         if checksum != int(message_arr[len(message_arr)-1]):
-            logging.debug("Checksum error-" + "Calculated:" + str(checksum))
+            #logging.debug("Checksum error-" + "Calculated:" + str(checksum))
             return False
-
+        logging.debug("checksum pass")
         return True
 
 
