@@ -175,6 +175,7 @@ class MessageParser:
 
             # Remove: []\n, fill list of string
             message_readings = message_string[1:len(message_string)-2].split(",")
+            print(str(message_readings))
             serial_number = message_readings[0]
             message_type = message_readings[GeneralMessageIndex.MESSAGE_TYPE.value]
 
