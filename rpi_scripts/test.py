@@ -225,7 +225,7 @@ class MessageParser:
         # Checksum validation
         end_index = len(message_string) - 5 if message_string[len(message_string) - 5] == ',' \
             else len(message_string) - 4
-        logging.info("end index calculated:" + end_index + " msg length:" + len(message_string))
+        logging.info("end index calculated:" + str(end_index) + " msg length:" + str(len(message_string)))
         for i, c in enumerate(message_string[0:end_index]):  # checksum itself removed from the string
             checksum = ord(c) if i == 0 else (checksum ^ ord(c))
         message_arr = message_string[0:len(message_string)-2].split(',')
