@@ -182,8 +182,8 @@ class MessageParser:
             # Remove Serial Number, Type, Checksum, convert remaining strings to float
             message_readings = [float(i) for i in (message_readings[2:len(message_readings)-1])]
 
-            return Message(serial_number, MessageType.MOVEMENT if message_type == MessageType.MOVEMENT
-                           else MessageType.POWER, message_readings)
+            return Message(serial_number, MessageType.MOVEMENT if message_type == MessageType.MOVEMENT.value
+                           else MessageType.POWER.value, message_readings)
         else:
             raise Exception("Message validity check failed. Received: " + message_string)
 
