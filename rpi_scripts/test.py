@@ -195,24 +195,24 @@ class MessageParser:
         if len(message_string) < 6:
             logging.debug("message received too short")
             return False
-
+        logging.debug("length pass")
         # Sentinel framing check
         if message_string[0] != '[' or message_string[message_length-1] != '\n' or message_string[message_length-2] != ']':
             logging.debug("Sentinel framing error")
             return False
-
+        logging.debug("sentinel pass")
         message_arr = message_string[1:message_length - 2].split(",")
         # Quick length check
         if len(message_arr) < 5:  # Shortest valid message: [23,P,0.2,0.3,CHECKSUM]
             logging.debug("Short message error")
             return False
-
+        logging.debug("elements pass")
         # Unknown type check
         message_type = message_arr[GeneralMessageIndex.MESSAGE_TYPE.value]
         if message_type not in [MessageType.MOVEMENT.value, MessageType.POWER.value]:
             logging.debug("Invalid message type error:" + message_type)
             return False
-
+        logging.debug("type pass")
         # Number of elements check
         if message_type == MessageType.MOVEMENT.value and len(message_arr) != 15:
             logging.debug("Incorrect number of elements error (movement message)")
@@ -225,9 +225,11 @@ class MessageParser:
         # Checksum validation
         end_index = len(message_string) - 5 if message_string[len(message_string) - 5] == ',' \
             else len(message_string) - 4
+        logging.info("end index calculated:" + end_index + " msg length:" + len(message_string))
         for i, c in enumerate(message_string[0:end_index]):  # checksum itself removed from the string
             checksum = ord(c) if i == 0 else (checksum ^ ord(c))
         message_arr = message_string[0:len(message_string)-2].split(',')
+
         if checksum != int(message_arr[len(message_arr)]):
             logging.debug("Checksum error-" + "Calculated:" + str(checksum))
             return False
