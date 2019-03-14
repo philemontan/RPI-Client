@@ -332,7 +332,7 @@ def interactive_mode(args):
                 frame_length = params[2]
 
             print("Expect " + str(int((6*frames_per_move*frame_length*(2.0/3.0))/60)) + " minutes "
-                  + str(int((6*frames_per_move*frame_length*(2.0/3.0))/60)) + " seconds of dancing per person")
+                  + str(int((6.0*frames_per_move*frame_length*(2.0/3.0)) % 60)) + " seconds of dancing per person")
 
             # Persistence setup
             time_str = str(int(time.time()))
