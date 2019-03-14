@@ -227,10 +227,12 @@ class MessageParser:
             return False
 
         # Checksum validation
-        for i, c in enumerate(message_string[1:len(message_string)-3]):  # checksum itself removed from the string
+        end_index = len(message_string) - 5 if message_string[len(message_string) - 5] == ',' \
+            else len(message_string) - 4
+        for i, c in enumerate(message_string[1:end_index]):  # checksum itself removed from the string
             checksum = ord(c) if i == 0 else (checksum ^ ord(c))
         if checksum != ord(message_string[len(message_string)-3]):
-            logging.debug("Checksum error-" + "Calulated:" + checksum)
+            logging.debug("Checksum error-" + "Calculated:" + str(checksum))
             return False
         print("checksum pass")
 
