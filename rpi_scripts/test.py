@@ -331,8 +331,8 @@ def interactive_mode(args):
                 print("Warning! Overwriting default global frame length of", frame_length, "with", params[2])
                 frame_length = params[2]
 
-            print("Expect " + str(int((5*frames_per_move*frame_length)/60)) + " minutes "
-                  + str(int((5*frames_per_move*frame_length) % 60)) + " seconds of dancing per person")
+            print("Expect " + str(int((6*frames_per_move*frame_length)/60)) + " minutes "
+                  + str(int((6*frames_per_move*frame_length) % 60)) + " seconds of dancing per person")
 
             # Persistence setup
             time_str = str(int(time.time()))
