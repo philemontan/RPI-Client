@@ -36,7 +36,7 @@ class RpiMLClient:
 class RpiMegaClient:
     def __init__(self, terminal="/dev/ttyAMA0", baudrate=115200):
         try:
-            self.port = serial.Serial(terminal, baudrate, timeout=3)
+            self.port = serial.Serial(terminal, baudrate, timeout=None)
             if self.port.is_open:
                 logging.info("Serial port already open")
             else:
@@ -170,7 +170,9 @@ class MessageParser:
     """Parses readings messages sent from the Mega, not intended for general message parsing"""
     @staticmethod
     def parse(message_string):
+        message_string = message_string[1:]
         if MessageParser.validity_check(message_string):
+            print("validity check pass")
             message_type = message_string[GeneralMessageIndex.MESSAGE_TYPE.value]
 
             # Reference message: "[SN,T,....,CS]\n"
@@ -178,9 +180,14 @@ class MessageParser:
             # Remove: []\n, fill list of string
             message_readings = message_string[1:len(message_string)-2].split(",")
             serial_number = message_readings[0]
+            
+            print("first rmeove pass")
+
 
             # Remove Serial Number, Type, Checksum, convert remaining strings to float
             message_readings = [float(i) for i in (message_readings[2:len(message_readings)-1])]
+
+            print("second remove pass")
             return Message(serial_number, MessageType.MOVEMENT if message_type == MessageType.MOVEMENT
                            else MessageType.POWER, message_readings)
         else:
@@ -189,34 +196,52 @@ class MessageParser:
     @staticmethod
     def validity_check(message_string):
         message_length = len(message_string)
+        print("entered validity check")
+        # String length check
+        if len(message_string) < 6:
+            logging.debug("message received too short:" + message_string)
+            return False
+        print("length check pass")
+
         # Sentinel framing check
         if message_string[0] != '[' or message_string[message_length-1] != '\n' or message_string[message_length-2] != ']':
             logging.debug("Sentinel framing error")
             return False
+        print("sentinel check pass")
 
         message_arr = message_string[1:message_length - 2].split(",")
         # Quick length check
         if len(message_arr) < 5:  # Shortest valid message: [23,P,0.2,0.3,CHECKSUM]
             logging.debug("Short message error")
             return False
+        print("short message pass")
+
         # Unknown type check
         message_type = message_arr[GeneralMessageIndex.MESSAGE_TYPE.value]
         if message_type not in [MessageType.MOVEMENT.value, MessageType.POWER.value]:
-            logging.debug("Invalid message type error")
+            logging.debug("Invalid message type error:" + message_type)
             return False
+        print("invalid message type pass")
+
         # Number of elements check
         if message_type == MessageType.MOVEMENT.value and len(message_arr) != 15:
             logging.debug("Incorrect number of elements error (movement message)")
             return False
+        print("incorrect number of elements error for movement pass")
+
         if message_type == MessageType.POWER.value and len(message_arr) != 5:
             logging.debug("Incorrect number of elements error (power message)")
             return False
+        print("incorrect number of elements error for power pass")
+
+
         # Checksum validation
-        for i, c in enumerate(message_string[1:len(message_string)-3]): # checksum itself removed from the string
-            checksum = ord(c) if i == 0 else (checksum ^ ord(c))
-        if checksum != ord(message_string[len(message_string)-3]):
-            logging.debug("Checksum error")
-            return False
+        #for i, c in enumerate(message_string[1:len(message_string)-3]): # checksum itself removed from the string
+        #    checksum = ord(c) if i == 0 else (checksum ^ ord(c))
+        #if checksum != ord(message_string[len(message_string)-3]):
+        #    logging.debug("Checksum error")
+        #    return False
+        #print("checksum pass")
 
         return True
 
@@ -286,6 +311,7 @@ def interactive_mode(args):
                     while True:
                         print("Waiting for message (3 sec timeout):")
                         print("Message received: ", mega_client.read_message())
+                        #mega_client.send_message("A")
 
                 # Handshake Mode
                 elif mode == "3":
@@ -350,8 +376,8 @@ def interactive_mode(args):
                             else:
                                 error_count = 0
                                 # Acknowledge the message
-                                logging.debug("Message No:" + message.serial_number + "received")
-                                mega_client.send_message("A," + message.serial_number + "\n")
+                                #logging.debug("Message No:" + message.serial_number + "received")
+                                #mega_client.send_message("A," + message.serial_number + "\n")
                                 logging.debug("Acknowledgement of message no:" + message.serial_number + "sent")
                                 logging.info(
                                     "m:" + message.serial_number + "(" + message.type.value + ")=" + str(message.readings))
@@ -431,8 +457,8 @@ def evaluation_mode(mega_client, server_client, ml_client):
                     error_count = 0
                     # Acknowledge the message
                     logging.debug("Message No:" + message.serial_number + "received")
-                    mega_client.send_message("A," + message.serial_number + "\n")
-                    logging.debug("Acknowledgement of message no:" + message.serial_number + "sent")
+                    #mega_client.send_message("A," + message.serial_number + "\n")
+                    #logging.debug("Acknowledgement of message no:" + message.serial_number + "sent")
                     logging.info("m:" + message.serial_number + "(" + message.type.value + ")=" + str(message.readings))
                     # Add readings set to buffer
                     if message.type == MessageType.MOVEMENT:
