@@ -14,7 +14,7 @@ from Crypto import Random
 import numpy
 
 #Global Flags
-fail_fast = False  # No error recovery if true. System exits immediately on exception.
+fail_fast = True  # No error recovery if true. System exits immediately on exception.
 
 candidates_required = 3
 frame_length = 50  # 1 frame per prediction
@@ -38,7 +38,7 @@ class RpiMegaClient:
         try:
             self.port = serial.Serial(terminal, baudrate, timeout=None)
             if self.port.is_open:
-                logging.info("Serial port already open")
+                logging.debug("Serial port already open")
             else:
                 self.port.open()
                 logging.info("Successfully opened serial port:" + terminal + "w/ baud rate:" + baudrate)
@@ -59,19 +59,20 @@ class RpiMegaClient:
         self.port.read_until()  # Discards first chunk till \n, bare read may fail on decode
 
     def three_way_handshake(self):
+        logging.info("Entered handshake mode")
         while True:
             self.send_message("H")
-            logging.info("H sent")
-            logging.info("Sleep for 1 second")
+            logging.debug("H sent")
+            logging.debug("Sleep for 1 second")
             time.sleep(1)
             if self.read_message() == "A\n":
-                logging.info("A received")
+                logging.debug("A received")
                 self.send_message("A")
-                logging.info("A sent")
-                logging.info("Entering sleep for 3 seconds")
+                logging.debug("A sent")
+                logging.debug("Entering sleep for 3 seconds")
                 time.sleep(3)
                 self.port.reset_input_buffer()
-                logging.info("Buffer flushed")
+                logging.debug("Buffer flushed")
                 logging.info("Handshake complete")
                 break
 
@@ -86,13 +87,15 @@ class RpiEvalServerClient:
             logging.info("Attempting to connect to evaluation server ...")
             self.sock.connect((target_ip, int(target_port)))
         except OSError as e1:
-            logging.info("An error occurred, system exiting")
+            logging.debug("An error occurred, system exiting")
             logging.debug("Attempted to connect to: " + target_ip + "(" + target_port + ")" + '\n' + str(e1))
+            logging.debug(repr(e1))
             if fail_fast:
                 sys.exit()
         except ValueError as e2:
-            logging.info("An error occurred, system exiting")
+            logging.debug("An error occurred, system exiting")
             logging.debug("Attempted to connect to: " + target_ip + "(" + target_port + ")" + '\n' + str(e2))
+            logging.debug(repr(e2))
             if fail_fast:
                 sys.exit()
         else:
@@ -170,17 +173,15 @@ class MessageParser:
     def parse(message_string):
         message_string = message_string[1:]    # TODO; FIND OUT WHY MEGA IS PRE-PENDING 0x00
         if MessageParser.validity_check(message_string):
-            logging.info("Validity check success")
-            # Reference message: "[SN,T,....,CS]\n"
+            logging.debug("Validity check success")
 
-            # Remove: []\n, fill list of string
+            # Reference message: "[SN,T,....,CS]\n" -- Remove: []\n, fill list of string
             message_readings = message_string[1:len(message_string)-2].split(",")
-            print(str(message_readings))
             serial_number = message_readings[0]
             message_type = message_readings[GeneralMessageIndex.MESSAGE_TYPE.value]
 
             # Remove Serial Number, Type, Checksum, convert remaining strings to float
-            message_readings = [float(i) for i in (message_readings[2:len(message_readings)-1])]
+            message_readings = [format(float(i), '.2f') for i in (message_readings[2:len(message_readings)-1])]  # TODO make sure all are 2dp
 
             return Message(serial_number, MessageType.MOVEMENT if message_type == MessageType.MOVEMENT.value
                            else MessageType.POWER, message_readings)
@@ -190,30 +191,30 @@ class MessageParser:
     @staticmethod
     def validity_check(message_string):
         message_length = len(message_string)
-        logging.info("Entered validity check")
+
         # String length check
         if len(message_string) < 6:
             logging.debug("message received too short")
             return False
-        logging.debug("length pass")
+
         # Sentinel framing check
         if message_string[0] != '[' or message_string[message_length-1] != '\n' or message_string[message_length-2] != ']':
             logging.debug("Sentinel framing error")
             return False
-        logging.debug("sentinel pass")
+
         message_arr = message_string[1:message_length - 2].split(",")
+
         # Quick length check
         if len(message_arr) < 5:  # Shortest valid message: [23,P,0.2,0.3,CHECKSUM]
             logging.debug("Short message error")
             return False
-        logging.debug("elements pass")
+
         # Unknown type check
         message_type = message_arr[GeneralMessageIndex.MESSAGE_TYPE.value]
-        print("validity check message type:", message_type)
         if message_type not in [MessageType.MOVEMENT.value, MessageType.POWER.value]:
             logging.debug("Invalid message type error:" + message_type)
             return False
-        logging.debug("type pass")
+
         # Number of elements check
         if message_type == MessageType.MOVEMENT.value and len(message_arr) != 15:
             logging.debug("Incorrect number of elements error (movement message)")
@@ -226,15 +227,13 @@ class MessageParser:
         # Checksum validation
         end_index = len(message_string) - 5 if message_string[len(message_string) - 5] == ',' \
             else len(message_string) - 4
-        #logging.info("end index calculated:" + str(end_index) + " msg length:" + str(len(message_string)))
         for i, c in enumerate(message_string[0:end_index]):  # checksum itself removed from the string
             checksum = ord(c) if i == 0 else (checksum ^ ord(c))
         message_arr = message_string[0:len(message_string)-2].split(',')
 
         if checksum != int(message_arr[len(message_arr)-1]):
-            #logging.debug("Checksum error-" + "Calculated:" + str(checksum))
+            logging.debug("Checksum error-" + "Calculated:" + str(checksum))
             return False
-        logging.debug("checksum pass")
         return True
 
 
@@ -315,7 +314,7 @@ def interactive_mode(args):
                 elif mode == "E":
                     break
 
-        # TODO ML INTERACTIVE MODE w/ training loops
+        # TODO ML INTERACTIVE MODE w/ training loops -- pend testing
         elif mode == InteractiveModeIndex.ML.value:
             mega_client = RpiMegaClient(baudrate=args.baud_rate)
 
@@ -368,9 +367,8 @@ def interactive_mode(args):
                             else:
                                 error_count = 0
                                 # Acknowledge the message
-                                #logging.debug("Message No:" + message.serial_number + "received")
+                                #logging.debug("Message No:" + message.serial_number + "received") # TODO reininstate ack for messages
                                 #mega_client.send_message("A," + message.serial_number + "\n")
-                                logging.debug("Acknowledgement of message no:" + message.serial_number + "sent")
                                 logging.info(
                                     "m:" + message.serial_number + "(" + message.type.value + ")=" + str(message.readings))
                                 # Add readings set to buffer
@@ -410,6 +408,7 @@ def evaluation_mode(mega_client, server_client, ml_client):
 
     # Inform Mega to start sending data
     mega_client.send_message("S")
+    logging.info("S sent")
 
     # Generate unlimited predictions
     while True:
@@ -448,7 +447,6 @@ def evaluation_mode(mega_client, server_client, ml_client):
                     # Acknowledge the message
                     #mega_client.send_message("A," + message.serial_number + "\n")  # TODO reinstate ACK later
 
-                    #logging.debug("Acknowledgement of message no:" + message.serial_number + "sent")
                     logging.info("m:" + message.serial_number + "(" + message.type.value + ")=" + str(message.readings))
                     # Add readings set to buffer
                     if message.type == MessageType.MOVEMENT:
@@ -494,14 +492,14 @@ def evaluation_mode(mega_client, server_client, ml_client):
                                                    cumulative_power=cumulative_power)
                     server_client.send_message(result_string)
                     move_power_readings = []  # Clear power readings
-                    logging.info("At least 2/3 candidates matched. Prediction accepted.")
+                    logging.info("Prediction accepted. Matched candidates >= 2/3")
                     logging.info("Result sent to server: " + result_string)
 
                 # Unacceptable results, all 3 candidates differ; dump the first 2
                 else:
                     candidates_generated -= 2
                     candidates = candidates[2:]
-                    logging.info("No match between all 3 candidates. Re-attempting move.")
+                    logging.info("Prediction rejected. Matched candidates < 2/3")
 
 
 if __name__ == "__main__":
