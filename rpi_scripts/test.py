@@ -230,7 +230,7 @@ class MessageParser:
             checksum = ord(c) if i == 0 else (checksum ^ ord(c))
         message_arr = message_string[0:len(message_string)-2].split(',')
 
-        if checksum != int(message_arr[len(message_arr)]):
+        if checksum != int(message_arr[len(message_arr)-1]):
             logging.debug("Checksum error-" + "Calculated:" + str(checksum))
             return False
 
