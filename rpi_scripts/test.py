@@ -168,7 +168,7 @@ class MessageParser:
     """Parses readings messages sent from the Mega, not intended for general message parsing"""
     @staticmethod
     def parse(message_string):
-        message_string = message_string[1:]
+        message_string = message_string[1:]    # TODO; FIND OUT WHY MEGA IS PRE-PENDING 0x00
         if MessageParser.validity_check(message_string):
             logging.info("Validity check success")
             message_type = message_string[GeneralMessageIndex.MESSAGE_TYPE.value]
@@ -176,16 +176,12 @@ class MessageParser:
             # Reference message: "[SN,T,....,CS]\n"
 
             # Remove: []\n, fill list of string
-            message_readings = message_string[0:len(message_string)-2].split(",")  # TODO FIND OUT WHY GOT x00
+            message_readings = message_string[0:len(message_string)-2].split(",")
             serial_number = message_readings[0]
-            
-            print("first rmeove pass")
-
 
             # Remove Serial Number, Type, Checksum, convert remaining strings to float
             message_readings = [float(i) for i in (message_readings[2:len(message_readings)-1])]
 
-            print("second remove pass")
             return Message(serial_number, MessageType.MOVEMENT if message_type == MessageType.MOVEMENT
                            else MessageType.POWER, message_readings)
         else:
@@ -231,10 +227,10 @@ class MessageParser:
             else len(message_string) - 4
         for i, c in enumerate(message_string[0:end_index]):  # checksum itself removed from the string
             checksum = ord(c) if i == 0 else (checksum ^ ord(c))
-        if checksum != ord(message_string[len(message_string)-3]):
+        message_arr = message_string[0:len(message_string)-2].split(',')
+        if checksum != int(message_arr[len(message_arr)]):
             logging.debug("Checksum error-" + "Calculated:" + str(checksum))
             return False
-        print("checksum pass")
 
         return True
 
