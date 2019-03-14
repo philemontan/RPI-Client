@@ -171,13 +171,12 @@ class MessageParser:
         message_string = message_string[1:]    # TODO; FIND OUT WHY MEGA IS PRE-PENDING 0x00
         if MessageParser.validity_check(message_string):
             logging.info("Validity check success")
-            message_type = message_string[GeneralMessageIndex.MESSAGE_TYPE.value]
-            print("parsed message type:", message_type)
             # Reference message: "[SN,T,....,CS]\n"
 
             # Remove: []\n, fill list of string
             message_readings = message_string[1:len(message_string)-2].split(",")
             serial_number = message_readings[0]
+            message_type = message_readings[GeneralMessageIndex.MESSAGE_TYPE.value]
 
             # Remove Serial Number, Type, Checksum, convert remaining strings to float
             message_readings = [float(i) for i in (message_readings[2:len(message_readings)-1])]
