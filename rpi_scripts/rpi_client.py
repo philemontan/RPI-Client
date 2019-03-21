@@ -19,7 +19,7 @@ fail_fast = True  # No error recovery if true. System exits immediately on excep
 
 candidates_required = 3
 frame_length = 10  # 1 frame per prediction
-sampling_interval = 0.02  # frames per second = frame_length / (1 / sampling interval) ==> 1 frame per second
+sampling_interval = 0.05  # frames per second = frame_length / (1 / sampling interval) ==> 1 frame per second
 overlap_ratio = 0.5
 
 
@@ -157,7 +157,8 @@ class PowerMessageIndex(Enum):
 class InteractiveModeIndex(Enum):
     SERVER_COMMS = "1"
     MEGA_COMMS = "2"
-    ML = "3"
+    TRAINING_GROUP = "3"
+    TRAINING_SOLO = "4"
 
 
 class Message:
@@ -269,7 +270,7 @@ def fetch_script_arguments():
 def interactive_mode(args):
     """Interactive mode intended for convenient testing"""
     while True:
-        print("Component to test: (1)Comms to server, (2)Comms to arduino (3)ML - Generate training data")
+        print("Component to test: (1)Comms to server, (2)Comms to arduino (3)Training - group (4) Training - solo")
         mode = input()
 
         # Socket communication to Server
@@ -288,8 +289,8 @@ def interactive_mode(args):
         elif mode == InteractiveModeIndex.MEGA_COMMS.value:
             mega_client = RpiMegaClient(baudrate=args.baud_rate)
             while True:
-                print("Functionality to test: (1)Send 1 message, (2)Repeat read & print, (3)3-way-Handshake,"
-                      "(4)Speed test (E)exit")
+                print("Functionality to test: (1)Send one message, (2)Repeat read-print for 5 seconds, \
+                        (3)Three way handshake," "(4)Speed test (E)Exit")
                 mode = input()
 
                 # Send 1 message
@@ -299,16 +300,17 @@ def interactive_mode(args):
 
                 # Repeat read & print
                 elif mode == "2":
-                    print("Enter any key to begin (keyboard interrupt required to exit this mode):")
+                    print("Enter any key to begin:")
                     input()
+                    start_time = int(time.time())
                     while True:
-                        print("Waiting for message (3 sec timeout):")
                         print("Message received: ", mega_client.read_message())
-                        #mega_client.send_message("A")
+                        if int(time.time()) - start_time > 5:
+                            break
 
                 # Handshake Mode
                 elif mode == "3":
-                    print("Enter any key to initiate handshake mode:")
+                    print("Enter any key to begin handshake:")
                     input()
                     mega_client.three_way_handshake()
 
@@ -320,7 +322,7 @@ def interactive_mode(args):
                     timings = []
                     mega_client.send_message("S")
                     print("S sent to mega")
-                    while iteration != 3:
+                    while iteration < 4:
                         mega_client.port.reset_input_buffer()
                         mega_client.discard_till_sentinel()
 
@@ -331,21 +333,20 @@ def interactive_mode(args):
                         timings.append(end_time-start_time)
                         iteration += 1
                         buffer.clear()
-                    time_for_150 = float(timings[0] + timings[1] + timings[2])/150.0
-                    print("Average time taken to process a data point: " + format(time_for_150, ".6f") + " seconds")
-                    print("Data points per second: " + format(1.0/time_for_150, ".2f"))
+                    time_for_150 = round(float(timings[0] + timings[1] + timings[2])/150.0, 6)
+                    print("Average time taken to process a data point:", time_for_150, " seconds")
+                    print("Data points per second:", round(1.0/time_for_150, 2))
                     print("Exiting speed test")
                 # Exit
                 elif mode == "E":
                     break
 
         # TODO ML INTERACTIVE MODE w/ training loops -- pend testing
-        elif mode == InteractiveModeIndex.ML.value:
+        elif mode == InteractiveModeIndex.TRAINING_GROUP.value:
             mega_client = RpiMegaClient(baudrate=args.baud_rate)
 
             # Prompt training parameters
-            print("5 moves mode to be trained: (1)Hunchback, (2)Raffles, (3)Chicken, (4)Crab, (5)Cowboy\nExpect 1"
-                  "second of dancing per data point")
+            print("Order of moves to train: (0)Final (1)Hunchback, (2)Raffles, (3)Chicken, (4)Crab, (5)Cowboy")
             print("Enter training parameters: number of people, frames to collect per move, frame length, data points per second")
             global frame_length
             global sampling_interval
@@ -430,12 +431,102 @@ def interactive_mode(args):
                     print(str(j))
                 temp_arr = numpy.array(training_data[i].copy())
                 current_date = datetime.date.today()
-                timestamp =  str(current_date.day) + "-" + str(current_date.month) + "-" + str(current_date.year)[2:] \
+                timestamp = str(current_date.day) + "-" + str(current_date.month) + "-" + str(current_date.year)[2:] \
                     + "-" + time_str[5:]
                 temp_file_name = "training_data/" + timestamp + "_" + Move(i+1).name + "_" + "P" + str(num_people) \
                     + "F" + str(frames_per_move) + "FL" + str(frame_length)
                 numpy.save(temp_file_name, temp_arr)
                 print("Data saved in:" + temp_file_name)
+
+        elif mode == InteractiveModeIndex.TRAINING_SOLO.value:
+            mega_client = RpiMegaClient(baudrate=args.baud_rate)
+            mega_client.three_way_handshake()
+
+            print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+            print("Generate data (frames) for one move at a time")
+            print("Parameters: L - Frame length, X - Number of frames, R - Overlap Ratio")
+            print("Relation: X frames require L+(X-1)(1-R)(L) data points => we save on roughly (R*100)% data points")
+            print("--Autosaves every 100 frames => ~100s for frame length of 20")
+            print("--System max data points per second is ~20 => 0.05s sampling interval")
+            print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n")
+            print("Move numbers:(0)FINAL, (1)HUNCHBACK, (2)RAFFLES, (3)CHICKEN, (4)CRAB, (5)COWBOY, (6)RUNNINGMAN")
+            print("Enter: move number, frame length, sampling interval")
+
+            global frame_length
+            global sampling_interval
+
+            params = [int(i) for i in input().split()]
+            input_move_number = int(params[0])
+            input_frame_length = int(params[1])
+            input_sampling_interval = round(float(params[2]), 2)
+
+            if input_frame_length != frame_length:
+                print("Warning! Temporarily overwriting default global frame length of", frame_length, "with", input_frame_length)
+                frame_length = input_frame_length
+            if sampling_interval != input_sampling_interval:
+                print("Warning! Temporarily overwriting default global sampling interval of", sampling_interval, "with", suggested_sampling_interval)
+                sampling_interval = input_sampling_interval
+            else:
+                print("No change to default sample interval of", sampling_interval)
+
+            mega_client.send_message("S") # Inform mega to start sending data
+            print("-\nPrepare to dance move:", Move(input_move_number).name, "(press any key to start dancing -- Ctrl + C to interrupt)")
+            input()
+            mega_client.port.reset_input_buffer()
+            mega_client.discard_till_sentinel()
+
+            # Persistence setup
+            current_date = datetime.date.today()
+            data_buffer = [] # List of data points
+            training_data = [] # List of frames
+            session_chunk_number = 0
+
+            try:
+                while True:
+                    while len(data_buffer) < frame_length:
+                        if sampling_interval > 0:
+                            time.sleep(sampling_interval)
+                            mega_client.port.reset_input_buffer()
+                            mega_client.discard_till_sentinel()
+                        message = MessageParser.parse(mega_client.read_message()) # TODO error correction if fail to parse
+                        logging.info("m:" + message.serial_number + "(" + message.type.value + ")=" + str(message.readings))
+                        # Add readings set to buffer
+                        if message.type == MessageType.MOVEMENT:
+                            data_buffer.append(message.readings)
+                        else:
+                            pass  # No need for power values
+                    training_data.append(data_buffer.copy())
+                    data_buffer = data_buffer[int(frame_length*(1-overlap_ratio)):]  # Partial buffer flush
+
+                    # Autosave
+                    if len(training_data) == 100:
+                        temp_arr = numpy.array(training_data.copy())
+                        timestamp = str(current_date.day) + "-" + str(current_date.month) + "-" + str(current_date.year)[2:]\
+                            + "-" + time_str[5:]
+                        temp_file_name = "training_data/" + timestamp + "_" + Move(input_move_number).name\
+                            + "L" + str(frame_length) + "SI" + str(input_sampling_interval) + "R" + str(overlap_ratio)\
+                            + "(" + str(session_chunk_number) + ")"
+                        numpy.save(temp_file_name, temp_arr)
+                        training_data.clear()
+                        print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+                        print("File generated:", temp_file_name)
+                        print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+
+            except KeyboardInterrupt:
+                print("Session manually interrupted")
+                if len(training_data) < 10:
+                    print("No significant amount of unsaved data")
+                else:
+                    temp_arr = numpy.array(training_data.copy())
+                    timestamp = str(current_date.day) + "-" + str(current_date.month) + "-" + str(current_date.year)[2:]\
+                        + "-" + time_str[5:]
+                    temp_file_name = "training_data/" + timestamp + "_" + Move(input_move_number).name\
+                        + "L" + str(frame_length) + "SI" + str(input_sampling_interval) + "R" + str(
+                        overlap_ratio) + "(" + str(session_chunk_number) + "_incomplete" + ")"
+                    numpy.save(temp_file_name, temp_arr)
+                    print("Remaining data saved as", temp_file_name)
+                print("System exiting")
+                sys.exit(0)
 
 
 def evaluation_mode(mega_client, server_client, ml_client):
