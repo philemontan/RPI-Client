@@ -440,7 +440,7 @@ def interactive_mode(args):
 
 def evaluation_mode(mega_client, server_client, ml_client):
     # Loop Vars
-    cumulative_power = 0.0
+    temp_cumulative_power = 0.0
     evaluation_start_time = int(time.time())
 
     # (Blocking)Initial Handshake
@@ -489,7 +489,7 @@ def evaluation_mode(mega_client, server_client, ml_client):
                 else:
                     error_count = 0
                     # Acknowledge the message
-                    #mega_client.send_message("A," + message.serial_number + "\n")  # TODO reinstate ACK later
+                    #mega_client.send_message("A," + message.serial_number + "\n")  # TODO reinstate ACK
 
                     logging.info("m:" + message.serial_number + "(" + message.type.value + ")=" + str(message.readings))
                     # Add readings set to buffer
@@ -515,26 +515,24 @@ def evaluation_mode(mega_client, server_client, ml_client):
 
                 # Check for 2/3
                 if match_0_1 or match_0_2 or match_1_2:
-                    # Power calculations
+                    # Power calculations TODO: Mechanism to detect if power readings have been read ornot
                     move_end_time = int(time.time())
-                    move_time_ellapsed = move_end_time - move_start_time
-                    total_time_ellapsed = move_end_time - evaluation_start_time
-                    # TODO Here we assume move power readings have been read; write mechanism to detect otherwise
-                    current_power = move_power_readings[0] *\
-                        move_power_readings[1]
-                    cumulative_power = current_power \
-                        if cumulative_power == 0.0\
-                        else (((cumulative_power * total_time_ellapsed) +
-                               (current_power * move_time_ellapsed))/total_time_ellapsed)
+                    move_time_elapsed = move_end_time - move_start_time
+                    total_time_elapsed = move_end_time - evaluation_start_time
+                    temp_voltage = move_power_readings[0]
+                    temp_current = move_power_readings[1]
+                    temp_current_power = round(temp_voltage * temp_current, 2)
+                    temp_cumulative_power = temp_current_power \
+                        if temp_cumulative_power == 0.0\
+                        else (((temp_cumulative_power * total_time_elapsed) +
+                               (temp_current_power * move_time_elapsed))/total_time_elapsed)
 
                     # Sending result
-                    voltage = move_power_readings[0]
-                    current = move_power_readings[1]
                     result_string = format_results(action=candidates[0] if (match_0_1 or match_0_2)
                                                    else candidates[1],
-                                                   voltage=format(voltage, ".2f"), current=format(current, ".2f"),
-                                                   power=format(current_power, ".2f"),
-                                                   cumulative_power=format(cumulative_power, ".2f"))
+                                                   voltage=temp_voltage, current=temp_current,
+                                                   power=temp_current_power,
+                                                   cumulative_power=temp_cumulative_power)
                     server_client.send_message(result_string)
                     move_power_readings = []  # Clear power readings
                     logging.info("Prediction accepted. Matched candidates >= 2/3")
