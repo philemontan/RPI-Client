@@ -181,8 +181,8 @@ class MessageParser:
             serial_number = message_readings[0]
             message_type = message_readings[GeneralMessageIndex.MESSAGE_TYPE.value]
 
-            # Remove Serial Number, Type, Checksum, convert remaining strings to float
-            message_readings = [float(i) for i in (message_readings[2:len(message_readings)-1])]  # TODO make sure all are 2dp
+            # Remove Serial Number, Type, Checksum, convert remaining strings to float w/ 2 decimal points
+            message_readings = [round(float(i), 2) for i in (message_readings[2:len(message_readings)-1])]
 
             return Message(serial_number, MessageType.MOVEMENT if message_type == MessageType.MOVEMENT.value
                            else MessageType.POWER, message_readings)
