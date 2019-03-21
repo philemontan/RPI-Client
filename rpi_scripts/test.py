@@ -288,7 +288,8 @@ def interactive_mode(args):
         elif mode == InteractiveModeIndex.MEGA_COMMS.value:
             mega_client = RpiMegaClient(baudrate=args.baud_rate)
             while True:
-                print("Functionality to test: (1)Send 1 message, (2)Repeat read & print, (3)3-way-Handshake, (E)exit")
+                print("Functionality to test: (1)Send 1 message, (2)Repeat read & print, (3)3-way-Handshake,"
+                      "(4)Speed test (E)exit")
                 mode = input()
 
                 # Send 1 message
@@ -311,6 +312,29 @@ def interactive_mode(args):
                     input()
                     mega_client.three_way_handshake()
 
+                # Speed Test
+                elif mode == "4":
+                    mega_client.three_way_handshake()
+                    iteration = 1
+                    buffer = []
+                    timings = []
+                    mega_client.send_message("S")
+                    print("S sent to mega")
+                    while iteration != 3:
+                        mega_client.port.reset_input_buffer()
+                        mega_client.discard_till_sentinel()
+
+                        start_time = int(time.time())
+                        while len(buffer) != 50:
+                            buffer.append(MessageParser.parse(mega_client.read_message()))
+                        end_time = int(time.time())
+                        timings.append(end_time-start_time)
+                        iteration += 1
+                        buffer.clear()
+                    time_for_150 = float(timings[0] + timings[1] + timings[2])/150.0
+                    print("Average time taken to process a data point: " + format(time_for_150, ".6f") + " seconds")
+                    print("Data points per second: " + format(1.0/time_for_150, ".2f"))
+                    print("Exiting speed test")
                 # Exit
                 elif mode == "E":
                     break
