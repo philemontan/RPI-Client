@@ -346,15 +346,21 @@ def interactive_mode(args):
             # Prompt training parameters
             print("5 moves mode to be trained: (1)Hunchback, (2)Raffles, (3)Chicken, (4)Crab, (5)Cowboy\nExpect 1"
                   "second of dancing per data point")
-            print("Enter training parameters: number of people, frames to collect per move, frame length")
+            print("Enter training parameters: number of people, frames to collect per move, frame length, data points per second")
             global frame_length
+            global sampling_interval
             params = [int(i) for i in input().split()]
             num_people = params[0]
             frames_per_move = params[1]
+            suggested_sampling_interval = 1.0/params[3]
             if frame_length != params[2]:
-                print("Warning! Overwriting default global frame length of", frame_length, "with", params[2])
+                print("Warning! Temporarily overwriting default global frame length of", frame_length, "with", params[2])
                 frame_length = params[2]
-
+            if sampling_interval != suggested_sampling_interval:
+                print("Warning! Temporarily overwriting default global sampling interval of", sampling_interval, "with", suggested_sampling_interval)
+                print("Default global rate:", 1.0/sampling_interval, "|| Current sample rate", 1.0/suggested_sampling_interval)
+                sampling_interval = suggested_sampling_interval
+                
             print("Expect " + str(int((6*frames_per_move*frame_length*(2.0/3.0))/60)) + " minutes "
                   + str(int((6.0*frames_per_move*frame_length*(2.0/3.0)) % 60)) + " seconds of dancing per person")
 
