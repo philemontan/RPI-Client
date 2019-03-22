@@ -28,14 +28,14 @@ overlap_ratio = 0.5
 # Client for ML prediction, training data generation
 class RpiMLClient:
     def __init__(self):
-        self.model = joblib.load("trained_model.joblib")
+        self.model = joblib.load("trained_models/trained_model.joblib")
         pass
 
     # Expects frame as a list of lists, 50 rows, 12 cols
-    def predict(self, frame):
+    def temp_predict(self, input_frame):
         return "cowboy"
 
-    def temp_predict(self, input_frame):
+    def predict(self, input_frame):
         self.model.predict(input_frame)
 
 
@@ -596,7 +596,7 @@ def evaluation_mode(mega_client, server_client, ml_client):
                         move_power_readings = message.readings  # We only store 1 power reading set per move
 
             # Frame full; Generate candidate prediction from frame data
-            candidate_action = ml_client.predict(data_buffer)  # TODO this function call currently returns a dummy
+            candidate_action = ml_client.temp_predict(data_buffer)  # TODO this function call currently returns a dummy
             logging.info("Frame completed. Generated candidate:" + candidate_action)
             candidates.append(candidate_action)
             candidates_generated += 1
