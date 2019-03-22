@@ -520,7 +520,6 @@ def interactive_mode(args):
 
             except KeyboardInterrupt:
                 print("Session manually interrupted")
-                time_str = str(int(time.time()))
                 temp_arr = numpy.array(training_data.copy())
                 timestamp = str(current_date.day) + "-" + str(current_date.month) + "-" + str(current_date.year)[2:]\
                         + "-" + time_str[5:]
