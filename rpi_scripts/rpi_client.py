@@ -481,6 +481,7 @@ def interactive_mode(args):
 
             # Persistence setup
             current_date = datetime.date.today()
+            time_str = str(int(time.time()))
             data_buffer = [] # List of data points
             training_data = [] # List of frames
             session_chunk_number = 0
@@ -512,6 +513,7 @@ def interactive_mode(args):
                             + "(" + str(session_chunk_number) + ")"
                         numpy.save(temp_file_name, temp_arr)
                         training_data.clear()
+                        session_chunk_number += 1
                         print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
                         print("File generated:", temp_file_name)
                         print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
