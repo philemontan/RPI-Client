@@ -293,6 +293,8 @@ def interactive_mode(args):
 
         # Serial communication to Mega
         elif mode == InteractiveModeIndex.MEGA_COMMS.value:
+            global frame_length
+            global sampling_interval
             mega_client = RpiMegaClient(baudrate=args.baud_rate)
             while True:
                 print("Functionality to test: (1)Send one message, (2)Repeat read-print for 5 seconds, \
@@ -354,8 +356,6 @@ def interactive_mode(args):
             # Prompt training parameters
             print("Order of moves to train: (0)Final (1)Hunchback, (2)Raffles, (3)Chicken, (4)Crab, (5)Cowboy")
             print("Enter training parameters: number of people, frames to collect per move, frame length, data points per second")
-            global frame_length
-            global sampling_interval
             params = [int(i) for i in input().split()]
             num_people = params[0]
             frames_per_move = params[1]
@@ -457,9 +457,6 @@ def interactive_mode(args):
             print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n")
             print("Move numbers:(0)FINAL, (1)HUNCHBACK, (2)RAFFLES, (3)CHICKEN, (4)CRAB, (5)COWBOY, (6)RUNNINGMAN")
             print("Enter: move number, frame length, sampling interval")
-
-            global frame_length
-            global sampling_interval
 
             params = [int(i) for i in input().split()]
             input_move_number = int(params[0])
