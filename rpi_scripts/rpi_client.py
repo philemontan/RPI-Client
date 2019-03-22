@@ -13,6 +13,8 @@ import datetime
 from Crypto.Cipher import AES
 from Crypto import Random
 import numpy
+import joblib
+
 
 #Global Flags
 fail_fast = True  # No error recovery if true. System exits immediately on exception.
@@ -26,11 +28,15 @@ overlap_ratio = 0.5
 # Client for ML prediction, training data generation
 class RpiMLClient:
     def __init__(self):
+        self.model = joblib.load("trained_model.joblib")
         pass
 
     # Expects frame as a list of lists, 50 rows, 12 cols
     def predict(self, frame):
         return "cowboy"
+
+    def temp_predict(self, input_frame):
+        self.model.predict(input_frame)
 
 
 # Client for Mega communications
