@@ -13,7 +13,7 @@ import datetime
 from Crypto.Cipher import AES
 from Crypto import Random
 import numpy
-#from sklearn.externals import joblib
+from sklearn.externals import joblib
 
 
 #Global Flags
@@ -28,7 +28,7 @@ overlap_ratio = 0.5
 # Client for ML prediction, training data generation
 class RpiMLClient:
     def __init__(self):
- #       self.model = joblib.load("trained_models/trained_model.joblib")
+        self.model = joblib.load("trained_models/trained_model.joblib")
         pass
 
     # Expects frame as a list of lists, 50 rows, 12 cols
