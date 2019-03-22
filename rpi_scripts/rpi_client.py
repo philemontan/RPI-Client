@@ -13,7 +13,7 @@ import datetime
 from Crypto.Cipher import AES
 from Crypto import Random
 import numpy
-import joblib
+#import joblib
 
 
 #Global Flags
@@ -28,7 +28,7 @@ overlap_ratio = 0.5
 # Client for ML prediction, training data generation
 class RpiMLClient:
     def __init__(self):
-        self.model = joblib.load("trained_models/trained_model.joblib")
+ #       self.model = joblib.load("trained_models/trained_model.joblib")
         pass
 
     # Expects frame as a list of lists, 50 rows, 12 cols
@@ -36,7 +36,8 @@ class RpiMLClient:
         return "cowboy"
 
     def predict(self, input_frame):
-        self.model.predict(input_frame)
+  #      self.model.predict(input_frame)
+        return "cowboy"
 
 
 # Client for Mega communications
@@ -458,7 +459,7 @@ def interactive_mode(args):
             print("Move numbers:(0)FINAL, (1)HUNCHBACK, (2)RAFFLES, (3)CHICKEN, (4)CRAB, (5)COWBOY, (6)RUNNINGMAN")
             print("Enter: move number, frame length, sampling interval")
 
-            params = [int(i) for i in input().split()]
+            params = input().split()
             input_move_number = int(params[0])
             input_frame_length = int(params[1])
             input_sampling_interval = round(float(params[2]), 2)
@@ -502,7 +503,7 @@ def interactive_mode(args):
                     data_buffer = data_buffer[int(frame_length*(1-overlap_ratio)):]  # Partial buffer flush
 
                     # Autosave
-                    if len(training_data) == 100:
+                    if len(training_data) == 50:
                         temp_arr = numpy.array(training_data.copy())
                         timestamp = str(current_date.day) + "-" + str(current_date.month) + "-" + str(current_date.year)[2:]\
                             + "-" + time_str[5:]
@@ -517,17 +518,15 @@ def interactive_mode(args):
 
             except KeyboardInterrupt:
                 print("Session manually interrupted")
-                if len(training_data) < 10:
-                    print("No significant amount of unsaved data")
-                else:
-                    temp_arr = numpy.array(training_data.copy())
-                    timestamp = str(current_date.day) + "-" + str(current_date.month) + "-" + str(current_date.year)[2:]\
+                time_str = str(int(time.time()))
+                temp_arr = numpy.array(training_data.copy())
+                timestamp = str(current_date.day) + "-" + str(current_date.month) + "-" + str(current_date.year)[2:]\
                         + "-" + time_str[5:]
-                    temp_file_name = "training_data/" + timestamp + "_" + Move(input_move_number).name\
+                temp_file_name = "training_data/" + timestamp + "_" + Move(input_move_number).name\
                         + "L" + str(frame_length) + "SI" + str(input_sampling_interval) + "R" + str(
                         overlap_ratio) + "(" + str(session_chunk_number) + "_incomplete" + ")"
-                    numpy.save(temp_file_name, temp_arr)
-                    print("Remaining data saved as", temp_file_name)
+                numpy.save(temp_file_name, temp_arr)
+                print("Remaining data saved as", temp_file_name)
                 print("System exiting")
                 sys.exit(0)
 
