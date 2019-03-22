@@ -456,7 +456,7 @@ def interactive_mode(args):
             print("--Autosaves every 100 frames => ~100s for frame length of 20")
             print("--System max data points per second is ~20 => 0.05s sampling interval")
             print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n")
-            print("Move numbers:(0)FINAL, (1)HUNCHBACK, (2)RAFFLES, (3)CHICKEN, (4)CRAB, (5)COWBOY, (6)RUNNINGMAN")
+            print("Move numbers:(0)FINAL, (1)HUNCHBACK, (2)RAFFLES, (3)CHICKEN, (4)CRAB, (5)COWBOY")
             print("Enter: move number, frame length, sampling interval")
 
             params = input().split()
@@ -517,6 +517,13 @@ def interactive_mode(args):
                         print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
                         print("File generated:", temp_file_name)
                         print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+                        print("Continue?[y/n]")
+                        input_continue = input()
+                        if input_continue == "n":
+                            sys.exit()
+                        else:
+                            print("Press any key to start collection")
+                            input()
 
             except KeyboardInterrupt:
                 print("Session manually interrupted")
