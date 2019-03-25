@@ -493,7 +493,11 @@ def interactive_mode(args):
                             time.sleep(sampling_interval)
                             mega_client.port.reset_input_buffer()
                             mega_client.discard_till_sentinel()
-                        message = MessageParser.parse(mega_client.read_message()) # TODO error correction if fail to parse
+                        try:
+                            message = MessageParser.parse(mega_client.read_message()) # TODO error correction if fail to parse
+                        except:
+                            print("message validity error; ignored")
+                            continue # if message error, ignore
                         logging.info("m:" + message.serial_number + "(" + message.type.value + ")=" + str(message.readings))
                         # Add readings set to buffer
                         if message.type == MessageType.MOVEMENT:
