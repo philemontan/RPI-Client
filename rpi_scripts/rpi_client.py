@@ -534,7 +534,8 @@ def evaluation_mode(mega_client, server_client, ml_client):
                 data_buffer.clear()
                 continue  # Refill frame
             else:
-                logging.info("Frame completed. Generated candidate:" + candidate_action)
+                print("Frame completed. Generated candidate:" + candidate_action)
+                #logging.info("Frame completed. Generated candidate:" + candidate_action)
                 candidates.append(candidate_action)
 
             # Partial clear of frame buffer based on overlap
@@ -594,5 +595,5 @@ if __name__ == "__main__":
     elif mode == "2":  # Eval
         server_client = RpiEvalServerClient(args.target_ip, args.target_port, args.key)
         mega_client = RpiMegaClient(baudrate=args.baud_rate)
-        ml_client = RpiMLClient("trained_models/rf_model.sav")
+        ml_client = RpiMLClient("trained_models/trained_model_rf_full.sav")
         evaluation_mode(mega_client, server_client, ml_client)
