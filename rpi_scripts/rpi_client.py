@@ -38,6 +38,7 @@ class RpiMLClient:
         feature_frame = get_features_from_frame(numpy.array(input_frame))
         result = int(self.model.predict(feature_frame.reshape(1, -1))[0])
 
+        logging.info(self.model.predict_proba(feature_frame.reshape(1, -1))[0])
         if result == Move.FINAL.value:
             return "logout"
         elif result == Move.HUNCHBACK.value:
@@ -481,7 +482,7 @@ def evaluation_mode(mega_client, server_client, ml_client):
 
     # Generate unlimited predictions
     while True:
-        time.sleep(5)  # human reaction time
+        time.sleep(3)  # human reaction time
         mega_client.port.reset_input_buffer()  # flush input
         mega_client.discard_till_sentinel()  # flush is likely to cut off a message
 
@@ -593,5 +594,5 @@ if __name__ == "__main__":
     elif mode == "2":  # Eval
         server_client = RpiEvalServerClient(args.target_ip, args.target_port, args.key)
         mega_client = RpiMegaClient(baudrate=args.baud_rate)
-        ml_client = RpiMLClient("trained_models/trained_model_rf.sav")
+        ml_client = RpiMLClient("trained_models/rf_model.sav")
         evaluation_mode(mega_client, server_client, ml_client)
