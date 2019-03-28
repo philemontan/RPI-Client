@@ -563,7 +563,7 @@ def evaluation_mode(mega_client, server_client, ml_client):
                     # Calculated as joules with max precision
                     temp_cumulative_power = (temp_current_power / 1000.0) * total_time_elapsed \
                         if temp_cumulative_power == 0.0 \
-                        else temp_cumulative_power + (move_time_elapsed * temp_current_power * 1000.0)
+                        else temp_cumulative_power + (move_time_elapsed * (temp_current_power / 1000.0))
 
                     # Sending result
                     result_string = format_results(action=candidates[0] if (match_0_1 or match_0_2)
