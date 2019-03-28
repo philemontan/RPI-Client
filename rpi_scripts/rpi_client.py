@@ -201,7 +201,10 @@ class MessageParser:
             message_type = message_readings[GeneralMessageIndex.MESSAGE_TYPE.value]
 
             # Remove Serial Number, Type, Checksum, convert remaining strings to float w/ 2 decimal points
-            message_readings = [round(float(i), 2) for i in (message_readings[2:len(message_readings)-1])]
+            if message_type == MessageType.MOVEMENT.value:
+                message_readings = [round(float(i), 2) for i in (message_readings[2:len(message_readings)-1])]
+            elif message_type == MessageType.POWER.value:
+                message_readings = [float(i) for i in (message_readings[2:len(message_readings)-1])]
 
             return Message(serial_number, MessageType.MOVEMENT if message_type == MessageType.MOVEMENT.value
                            else MessageType.POWER, message_readings)
@@ -482,13 +485,13 @@ def evaluation_mode(mega_client, server_client, ml_client):
 
     # Generate unlimited predictions
     while True:
+        move_start_time = int(time.time())  # 1-second precision of seconds since epoch
         time.sleep(3)  # human reaction time
         mega_client.port.reset_input_buffer()  # flush input
         mega_client.discard_till_sentinel()  # flush is likely to cut off a message
 
         # Per result loop vars
         error_count = 0
-        move_start_time = int(time.time())  # 1-second precision of seconds since epoch
         candidates = []
         data_buffer = []
 
@@ -553,13 +556,14 @@ def evaluation_mode(mega_client, server_client, ml_client):
                     move_end_time = int(time.time())
                     move_time_elapsed = move_end_time - move_start_time
                     total_time_elapsed = move_end_time - evaluation_start_time
-                    temp_voltage = move_power_readings[0]
-                    temp_current = move_power_readings[1]
-                    temp_current_power = round(temp_voltage * temp_current, 2)
-                    temp_cumulative_power = temp_current_power \
-                        if temp_cumulative_power == 0.0\
-                        else (((temp_cumulative_power * total_time_elapsed) +
-                               (temp_current_power * move_time_elapsed))/total_time_elapsed)
+                    temp_voltage = move_power_readings[0]  # Send as volt with max precision
+                    temp_current = move_power_readings[1] * 1000.0  # Send as milliAmperes with max precision
+                    temp_current_power = temp_voltage * temp_current  # Calculated as milliWatts with max precision
+
+                    # Calculated as joules with max precision
+                    temp_cumulative_power = (temp_current_power / 1000.0) * total_time_elapsed \
+                        if temp_cumulative_power == 0.0 \
+                        else temp_cumulative_power + (move_time_elapsed * temp_current_power * 1000.0)
 
                     # Sending result
                     result_string = format_results(action=candidates[0] if (match_0_1 or match_0_2)
