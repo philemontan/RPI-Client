@@ -19,7 +19,7 @@ from Crypto import Random
 import numpy
 from sklearn.externals import joblib
 from drangler.FeatureExtractor import get_features_from_frame
-
+import pickle
 
 # Global Flags
 frame_length = 20  # 1 frame per prediction
@@ -30,6 +30,7 @@ overlap_ratio = 0.5
 # Client for ML prediction, training data generation
 class RpiMLClient:
     def __init__(self, file_path):
+        #self.model = pickle.load(open(file_path, "rb"))
         self.model = joblib.load(file_path)
 
     # Returns dance move classified as a lowercase string
