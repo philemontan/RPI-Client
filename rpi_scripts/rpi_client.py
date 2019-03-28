@@ -17,9 +17,9 @@ from Crypto.Cipher import AES
 from Crypto import Random
 # ML
 import numpy
+import pickle
 from sklearn.externals import joblib
 from drangler.FeatureExtractor import get_features_from_frame
-import pickle
 
 # Global Flags
 frame_length = 20  # 1 frame per prediction
@@ -30,7 +30,6 @@ overlap_ratio = 0.5
 # Client for ML prediction, training data generation
 class RpiMLClient:
     def __init__(self, file_path):
-        #self.model = pickle.load(open(file_path, "rb"))
         self.model = joblib.load(file_path)
 
     # Returns dance move classified as a lowercase string
@@ -587,5 +586,5 @@ if __name__ == "__main__":
     elif mode == "2":  # Eval
         server_client = RpiEvalServerClient(args.target_ip, args.target_port, args.key)
         mega_client = RpiMegaClient(baudrate=args.baud_rate)
-        ml_client = RpiMLClient("trained_models/trained_model_rf.sav")
+        ml_client = RpiMLClient("trained_models/out_rf/rf_model.sav")
         evaluation_mode(mega_client, server_client, ml_client)
