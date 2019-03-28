@@ -17,7 +17,7 @@ from Crypto.Cipher import AES
 from Crypto import Random
 # ML
 import numpy
-import pickle
+#import pickle
 from sklearn.externals import joblib
 from drangler.FeatureExtractor import get_features_from_frame
 
@@ -31,6 +31,7 @@ overlap_ratio = 0.5
 class RpiMLClient:
     def __init__(self, file_path):
         self.model = joblib.load(file_path)
+        #self.model = pickle.load(open(file_path, "rb"))
 
     # Returns dance move classified as a lowercase string
     def classify(self, input_frame):
@@ -320,6 +321,8 @@ def interactive_mode(args):
                 elif mode == "2":
                     print("Enter any key to begin:")
                     input()
+                    mega_client.send_message("S")
+                    time.sleep(5)
                     start_time = int(time.time())
                     while True:
                         print("Message received: ", mega_client.read_message())
@@ -382,6 +385,8 @@ def interactive_mode(args):
             if input_frame_length != frame_length:
                 print("Warning! Temporarily overwriting default global frame length of", frame_length, "with", input_frame_length)
                 frame_length = input_frame_length
+            else:
+                print("No change to default frame length of", frame_length)
             if sampling_interval != input_sampling_interval:
                 print("Warning! Temporarily overwriting default global sampling interval of", sampling_interval, "with", input_sampling_interval)
                 sampling_interval = input_sampling_interval
@@ -476,7 +481,7 @@ def evaluation_mode(mega_client, server_client, ml_client):
 
     # Generate unlimited predictions
     while True:
-        time.sleep(0.5)  # human reaction time
+        time.sleep(5)  # human reaction time
         mega_client.port.reset_input_buffer()  # flush input
         mega_client.discard_till_sentinel()  # flush is likely to cut off a message
 
@@ -487,7 +492,7 @@ def evaluation_mode(mega_client, server_client, ml_client):
         data_buffer = []
 
         # Per prediction loop -- 3 predictions for 1 result
-        while len(candidates) != 3:
+        while len(candidates) < 3:
             # Fill frame
             while len(data_buffer) < frame_length:
                 try:
@@ -573,7 +578,9 @@ def evaluation_mode(mega_client, server_client, ml_client):
 
 if __name__ == "__main__":
     args = fetch_script_arguments()
-    logging.basicConfig(level=logging.DEBUG if args.logging_mode == "debug" else logging.INFO)
+    if args.logging_mode == "info":
+        logging.basicConfig(level=logging.INFO)
+    #logging.basicConfig(level=logging.DEBUG if args.logging_mode == "debug" else logging.INFO)
     mode = 0
 
     while mode != "1" and mode != "2":
@@ -586,5 +593,5 @@ if __name__ == "__main__":
     elif mode == "2":  # Eval
         server_client = RpiEvalServerClient(args.target_ip, args.target_port, args.key)
         mega_client = RpiMegaClient(baudrate=args.baud_rate)
-        ml_client = RpiMLClient("trained_models/out_rf/rf_model.sav")
+        ml_client = RpiMLClient("trained_models/trained_model_rf.sav")
         evaluation_mode(mega_client, server_client, ml_client)
