@@ -378,7 +378,7 @@ def interactive_mode(args):
             print("--Autosaves every 100 frames => ~100s for frame length of 20")
             print("--System max data points per second is ~20 => 0.05s sampling interval")
             print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n")
-            print("Move numbers:(0)FINAL, (1)HUNCHBACK, (2)RAFFLES, (3)CHICKEN, (4)CRAB, (5)COWBOY")
+            print("Move numbers:(0)FINAL, (1)HUNCHBACK, (2)RAFFLES, (3)CHICKEN, (4)CRAB, (5)COWBOY, (6)RUNNINGMAN, (7)JAMESBOND, (8)SNAKE, (9)DOUBLEPUMP, (10)MERMAID")
             print("Enter: move number, frame length, sampling interval")
 
             params = input().split()
