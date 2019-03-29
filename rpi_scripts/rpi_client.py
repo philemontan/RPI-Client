@@ -291,7 +291,7 @@ def fetch_script_arguments():
 def interactive_mode(args):
     """Interactive mode intended for convenient testing"""
     while True:
-        print("Component to test: (1)Comms to server, (2)Comms to arduino (3)Training - group (4) Training - solo")
+        print("Component to test: (1)Comms to server, (2)Comms to arduino (3)Training - solo")
         mode = input()
 
         # Socket communication to Server
