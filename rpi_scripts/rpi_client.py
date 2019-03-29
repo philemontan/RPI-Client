@@ -486,7 +486,7 @@ def evaluation_mode(mega_client, server_client, ml_client):
     # Generate unlimited predictions
     while True:
         move_start_time = int(time.time())  # 1-second precision of seconds since epoch
-        time.sleep(3)  # human reaction time
+        time.sleep(0.5)  # human reaction time
         mega_client.port.reset_input_buffer()  # flush input
         mega_client.discard_till_sentinel()  # flush is likely to cut off a message
 
@@ -496,7 +496,7 @@ def evaluation_mode(mega_client, server_client, ml_client):
         data_buffer = []
 
         # Per prediction loop -- 3 predictions for 1 result
-        while len(candidates) < 3:
+        while len(candidates) < 2:
             # Fill frame
             while len(data_buffer) < frame_length:
                 try:
@@ -544,14 +544,12 @@ def evaluation_mode(mega_client, server_client, ml_client):
             # Partial clear of frame buffer based on overlap
             data_buffer = data_buffer[int(frame_length*(1-overlap_ratio)):]
 
-            if len(candidates) == 3:
+            if len(candidates) == 2:
                 # Match predictions
-                match_0_1 = candidates[0] == candidates[1]
-                match_0_2 = candidates[0] == candidates[2]
-                match_1_2 = candidates[1] == candidates[2]
+                match = candidates[0] == candidates[1]
 
-                # Check for 2/3
-                if match_0_1 or match_0_2 or match_1_2:
+                # Check for consecutive 2
+                if match:
                     # Power calculations TODO: Mechanism to detect if power readings have been read ornot
                     move_end_time = int(time.time())
                     move_time_elapsed = move_end_time - move_start_time
@@ -566,8 +564,7 @@ def evaluation_mode(mega_client, server_client, ml_client):
                         else temp_cumulative_power + (move_time_elapsed * (temp_current_power / 1000.0))
 
                     # Sending result
-                    result_string = format_results(action=candidates[0] if (match_0_1 or match_0_2)
-                                                   else candidates[1],
+                    result_string = format_results(action=candidates[0],
                                                    voltage=temp_voltage, current=temp_current,
                                                    power=temp_current_power,
                                                    cumulative_power=temp_cumulative_power)
@@ -578,8 +575,8 @@ def evaluation_mode(mega_client, server_client, ml_client):
 
                 # Unacceptable results, all 3 candidates differ; dump the first 2
                 else:
-                    candidates = candidates[2:]
-                    logging.info("Prediction rejected. Matched candidates < 2/3")
+                    candidates = candidates[1:]
+                    logging.info("Prediction rejected. No consecutive match")
 
 
 if __name__ == "__main__":
