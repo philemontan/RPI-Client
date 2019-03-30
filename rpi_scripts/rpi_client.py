@@ -5,32 +5,54 @@ import sys
 from enum import Enum
 
 # Third party imports
-import serial
-import socket
-import base64
+# General
 import time
 import datetime
+# Communication
+import serial
+import socket
+# Crypto
+import base64
 from Crypto.Cipher import AES
 from Crypto import Random
+# ML
 import numpy
+#import pickle
+from sklearn.externals import joblib
+from drangler.FeatureExtractor import get_features_from_frame
 
-#Global Flags
-fail_fast = True  # No error recovery if true. System exits immediately on exception.
-
-candidates_required = 3
-frame_length = 10  # 1 frame per prediction
-sampling_interval = 0.02  # frames per second = frame_length / (1 / sampling interval) ==> 1 frame per second
+# Global Flags
+frame_length = 20  # 1 frame per prediction
+sampling_interval = 0.05  # frames per second = frame_length / (1 / sampling interval) ==> 1 frame per second
 overlap_ratio = 0.5
 
 
 # Client for ML prediction, training data generation
 class RpiMLClient:
-    def __init__(self):
-        pass
+    def __init__(self, file_path):
+        self.model = joblib.load(file_path)
+        #self.model = pickle.load(open(file_path, "rb"))
 
-    # Expects frame as a list of lists, 50 rows, 12 cols
-    def predict(self, frame):
-        return "cowboy"
+    # Returns dance move classified as a lowercase string
+    def classify(self, input_frame):
+        feature_frame = get_features_from_frame(numpy.array(input_frame))
+        result = int(self.model.predict(feature_frame.reshape(1, -1))[0])
+
+        logging.info(self.model.predict_proba(feature_frame.reshape(1, -1))[0])
+        if result == Move.FINAL.value:
+            return "logout"
+        elif result == Move.HUNCHBACK.value:
+            return "hunchback"
+        elif result == Move.RAFFLES.value:
+            return "raffles"
+        elif result == Move.CHICKEN.value:
+            return "chicken"
+        elif result == Move.CRAB.value:
+            return "crab"
+        elif result == Move.COWBOY.value:
+            return "cowboy"
+        else:
+            raise ValueError("unexpected class")
 
 
 # Client for Mega communications
@@ -46,8 +68,7 @@ class RpiMegaClient:
         except serial.SerialException as e1:
             logging.debug("Error occurred attempting to open Serial port on " + terminal + str(baudrate) + str(baudrate))
             logging.debug("System error details:\n" + str(e1))
-            if fail_fast:
-                sys.exit()
+            sys.exit()
 
     def send_message(self, message):
         self.port.write((message + '\n').encode("utf-8"))
@@ -91,14 +112,12 @@ class RpiEvalServerClient:
             logging.debug("An error occurred, system exiting")
             logging.debug("Attempted to connect to: " + target_ip + "(" + target_port + ")" + '\n' + str(e1))
             logging.debug(repr(e1))
-            if fail_fast:
-                sys.exit()
+            sys.exit()
         except ValueError as e2:
             logging.debug("An error occurred, system exiting")
             logging.debug("Attempted to connect to: " + target_ip + "(" + target_port + ")" + '\n' + str(e2))
             logging.debug(repr(e2))
-            if fail_fast:
-                sys.exit()
+            sys.exit()
         else:
             logging.info("Successfully connected to:" + target_ip + "(" + target_port + ")")
 
@@ -157,7 +176,7 @@ class PowerMessageIndex(Enum):
 class InteractiveModeIndex(Enum):
     SERVER_COMMS = "1"
     MEGA_COMMS = "2"
-    ML = "3"
+    TRAINING_SOLO = "3"
 
 
 class Message:
@@ -181,13 +200,16 @@ class MessageParser:
             serial_number = message_readings[0]
             message_type = message_readings[GeneralMessageIndex.MESSAGE_TYPE.value]
 
-            # Remove Serial Number, Type, Checksum, convert remaining strings to float
-            message_readings = [float(i) for i in (message_readings[2:len(message_readings)-1])]  # TODO make sure all are 2dp
+            # Remove Serial Number, Type, Checksum, convert remaining strings to float w/ 2 decimal points
+            if message_type == MessageType.MOVEMENT.value:
+                message_readings = [round(float(i), 2) for i in (message_readings[2:len(message_readings)-1])]
+            elif message_type == MessageType.POWER.value:
+                message_readings = [float(i) for i in (message_readings[2:len(message_readings)-1])]
 
             return Message(serial_number, MessageType.MOVEMENT if message_type == MessageType.MOVEMENT.value
                            else MessageType.POWER, message_readings)
         else:
-            raise Exception("Message validity check failed. Received: " + message_string)
+            raise ValueError("Message validity check failed. Received: " + message_string)
 
     @staticmethod
     def validity_check(message_string):
@@ -269,7 +291,7 @@ def fetch_script_arguments():
 def interactive_mode(args):
     """Interactive mode intended for convenient testing"""
     while True:
-        print("Component to test: (1)Comms to server, (2)Comms to arduino (3)ML - Generate training data")
+        print("Component to test: (1)Comms to server, (2)Comms to arduino (3)Training - solo")
         mode = input()
 
         # Socket communication to Server
@@ -286,10 +308,12 @@ def interactive_mode(args):
 
         # Serial communication to Mega
         elif mode == InteractiveModeIndex.MEGA_COMMS.value:
+            global frame_length
+            global sampling_interval
             mega_client = RpiMegaClient(baudrate=args.baud_rate)
             while True:
-                print("Functionality to test: (1)Send 1 message, (2)Repeat read & print, (3)3-way-Handshake,"
-                      "(4)Speed test (E)exit")
+                print("Functionality to test: (1)Send one message, (2)Repeat read-print for 5 seconds, \
+                        (3)Three way handshake," "(4)Speed test (E)Exit")
                 mode = input()
 
                 # Send 1 message
@@ -299,16 +323,19 @@ def interactive_mode(args):
 
                 # Repeat read & print
                 elif mode == "2":
-                    print("Enter any key to begin (keyboard interrupt required to exit this mode):")
+                    print("Enter any key to begin:")
                     input()
+                    mega_client.send_message("S")
+                    time.sleep(5)
+                    start_time = int(time.time())
                     while True:
-                        print("Waiting for message (3 sec timeout):")
                         print("Message received: ", mega_client.read_message())
-                        #mega_client.send_message("A")
+                        if int(time.time()) - start_time > 5:
+                            break
 
                 # Handshake Mode
                 elif mode == "3":
-                    print("Enter any key to initiate handshake mode:")
+                    print("Enter any key to begin handshake:")
                     input()
                     mega_client.three_way_handshake()
 
@@ -320,7 +347,7 @@ def interactive_mode(args):
                     timings = []
                     mega_client.send_message("S")
                     print("S sent to mega")
-                    while iteration != 3:
+                    while iteration < 4:
                         mega_client.port.reset_input_buffer()
                         mega_client.discard_till_sentinel()
 
@@ -331,116 +358,118 @@ def interactive_mode(args):
                         timings.append(end_time-start_time)
                         iteration += 1
                         buffer.clear()
-                    time_for_150 = float(timings[0] + timings[1] + timings[2])/150.0
-                    print("Average time taken to process a data point: " + format(time_for_150, ".6f") + " seconds")
-                    print("Data points per second: " + format(1.0/time_for_150, ".2f"))
+                    time_for_150 = round(float(timings[0] + timings[1] + timings[2])/150.0, 6)
+                    print("Average time taken to process a data point:", time_for_150, " seconds")
+                    print("Data points per second:", round(1.0/time_for_150, 2))
                     print("Exiting speed test")
                 # Exit
                 elif mode == "E":
                     break
 
-        # TODO ML INTERACTIVE MODE w/ training loops -- pend testing
-        elif mode == InteractiveModeIndex.ML.value:
+        # Solo move training mode -- one move at a time
+        elif mode == InteractiveModeIndex.TRAINING_SOLO.value:
             mega_client = RpiMegaClient(baudrate=args.baud_rate)
-
-            # Prompt training parameters
-            print("5 moves mode to be trained: (1)Hunchback, (2)Raffles, (3)Chicken, (4)Crab, (5)Cowboy\nExpect 1"
-                  "second of dancing per data point")
-            print("Enter training parameters: number of people, frames to collect per move, frame length, data points per second")
-            global frame_length
-            global sampling_interval
-            params = [int(i) for i in input().split()]
-            num_people = params[0]
-            frames_per_move = params[1]
-            suggested_sampling_interval = 1.0/params[3]
-            if frame_length != params[2]:
-                print("Warning! Temporarily overwriting default global frame length of", frame_length, "with", params[2])
-                frame_length = params[2]
-            if sampling_interval != suggested_sampling_interval:
-                print("Warning! Temporarily overwriting default global sampling interval of", sampling_interval, "with", suggested_sampling_interval)
-                print("Default global rate:", 1.0/sampling_interval, "|| Current sample rate", 1.0/suggested_sampling_interval)
-                sampling_interval = suggested_sampling_interval
-                
-            print("Expect " + str(int((6*frames_per_move*frame_length*(2.0/3.0))/60)) + " minutes "
-                  + str(int((6.0*frames_per_move*frame_length*(2.0/3.0)) % 60)) + " seconds of dancing per person")
-
-            # Persistence setup
-            time_str = str(int(time.time()))
-            training_data = [[], [], [], [], [], []]  # [move_num][frame_num][data_point_num][sensor_readings_index]
-            data_buffer = []  # list of reading sets
-
-            # Handshake
             mega_client.three_way_handshake()
 
-            # Training loop
-            error_count = 0
-            # One iteration one person
-            for i in range(num_people):
-                # One iteration one move
-                for j in range(6):  # 5 moves +  End Move; Order: Final, Hunchback, Raffles, Chicken, Crab, Cowboy
-                    print("Person", i, "get ready to dance move:", Move(j+1).name)  # Note: enums start from 1
-                    print("Press any key to start dancing")
-                    input()
-                    if i == 0 and j == 0:
-                        mega_client.send_message("S")  # Inform mega to start sending data
+            print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+            print("Generate data (frames) for one move at a time")
+            print("Parameters: L - Frame length, X - Number of frames, R - Overlap Ratio")
+            print("Relation: X frames require L+(X-1)(1-R)(L) data points => we save on roughly (R*100)% data points")
+            print("--Autosaves every 100 frames => ~100s for frame length of 20")
+            print("--System max data points per second is ~20 => 0.05s sampling interval")
+            print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n")
+            print("Move numbers:(0)FINAL, (1)HUNCHBACK, (2)RAFFLES, (3)CHICKEN, (4)CRAB, (5)COWBOY, (6)RUNNINGMAN, (7)JAMESBOND, (8)SNAKE, (9)DOUBLEPUMP, (10)MERMAID")
+            print("Enter: move number, frame length, sampling interval")
 
-                    # Fill the data buffer; Note: frame_length, sampling_interval defined as global var
-                    current_number_of_frames = 0
-                    while current_number_of_frames < frames_per_move:
-                        # Fill frame
-                        while len(data_buffer) < frame_length:
-                            try:
-                                time.sleep(sampling_interval)
-                                mega_client.port.reset_input_buffer()  # flush input
-                                mega_client.discard_till_sentinel()  # flush is likely to cut off a message
-                                message = MessageParser.parse(mega_client.read_message())
-                            except Exception as err:
-                                logging.debug(repr(err))
-                                if fail_fast:
-                                    sys.exit()
-                                error_count += 1
-                                if error_count == 3:
-                                    error_count = 0
-                                    data_buffer.clear()
-                                    mega_client.three_way_handshake()
-                            else:
-                                error_count = 0
-                                # Acknowledge the message
-                                #logging.debug("Message No:" + message.serial_number + "received") # TODO reininstate ack for messages
-                                #mega_client.send_message("A," + message.serial_number + "\n")
-                                logging.info(
-                                    "m:" + message.serial_number + "(" + message.type.value + ")=" + str(message.readings))
-                                # Add readings set to buffer
-                                if message.type == MessageType.MOVEMENT:
-                                    data_buffer.append(message.readings)
-                                else:
-                                    pass  # No need for power values
-                        current_number_of_frames += 1
+            params = input().split()
+            input_move_number = int(params[0])
+            input_frame_length = int(params[1])
+            input_sampling_interval = round(float(params[2]), 2)
 
-                        # Partial buffer flush based on overlap
-                        training_data[j].append(data_buffer.copy())  # training_data[0] should be empty
-                        data_buffer = data_buffer[int(frame_length*(1-overlap_ratio)):]
-                    data_buffer.clear()  # Full buffer flush before next move
+            if input_frame_length != frame_length:
+                print("Warning! Temporarily overwriting default global frame length of", frame_length, "with", input_frame_length)
+                frame_length = input_frame_length
+            else:
+                print("No change to default frame length of", frame_length)
+            if sampling_interval != input_sampling_interval:
+                print("Warning! Temporarily overwriting default global sampling interval of", sampling_interval, "with", input_sampling_interval)
+                sampling_interval = input_sampling_interval
+            else:
+                print("No change to default sample interval of", sampling_interval)
 
-            # Write data gathered to files
-            print("Data gathering complete")
-            for i in range(6):
-                print("Data collected for " + Move(i+1).name + ":")
-                for j in training_data[i]:
-                    print(str(j))
-                temp_arr = numpy.array(training_data[i].copy())
-                current_date = datetime.date.today()
-                timestamp =  str(current_date.day) + "-" + str(current_date.month) + "-" + str(current_date.year)[2:] \
-                    + "-" + time_str[5:]
-                temp_file_name = "training_data/" + timestamp + "_" + Move(i+1).name + "_" + "P" + str(num_people) \
-                    + "F" + str(frames_per_move) + "FL" + str(frame_length)
+            mega_client.send_message("S") # Inform mega to start sending data
+            print("-\nPrepare to dance move:", Move(input_move_number).name, "(press any key to start dancing -- Ctrl + C to interrupt)")
+            input()
+            mega_client.port.reset_input_buffer()
+            mega_client.discard_till_sentinel()
+
+            # Persistence setup
+            current_date = datetime.date.today()
+            time_str = str(int(time.time()))
+            data_buffer = [] # List of data points
+            training_data = [] # List of frames
+            session_chunk_number = 0
+
+            try:
+                while True:
+                    while len(data_buffer) < frame_length:
+                        if sampling_interval > 0:
+                            time.sleep(sampling_interval)
+                            mega_client.port.reset_input_buffer()
+                            mega_client.discard_till_sentinel()
+                        try:
+                            message = MessageParser.parse(mega_client.read_message()) # TODO error correction if fail to parse
+                        except ValueError:
+                            print("message validity error; ignored")
+                            continue  # if message error, ignore
+                        logging.info("m:" + message.serial_number + "(" + message.type.value + ")=" + str(message.readings))
+                        # Add readings set to buffer
+                        if message.type == MessageType.MOVEMENT:
+                            data_buffer.append(message.readings)
+                        else:
+                            pass  # No need for power values
+                    training_data.append(data_buffer.copy())
+                    data_buffer = data_buffer[int(frame_length*(1-overlap_ratio)):]  # Partial buffer flush
+
+                    # Autosave
+                    if len(training_data) == 50:
+                        temp_arr = numpy.array(training_data.copy())
+                        timestamp = str(current_date.day) + "-" + str(current_date.month) + "-" + str(current_date.year)[2:]\
+                            + "-" + time_str[5:]
+                        temp_file_name = "training_data/" + timestamp + "_" + Move(input_move_number).name\
+                            + "L" + str(frame_length) + "SI" + str(input_sampling_interval) + "R" + str(overlap_ratio)\
+                            + "(" + str(session_chunk_number) + ")"
+                        numpy.save(temp_file_name, temp_arr)
+                        training_data.clear()
+                        session_chunk_number += 1
+                        print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+                        print("File generated:", temp_file_name)
+                        print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+                        print("Continue?[y/n]")
+                        input_continue = input()
+                        if input_continue == "n":
+                            sys.exit()
+                        else:
+                            print("Press any key to start collection")
+                            input()
+
+            except KeyboardInterrupt:
+                print("Session manually interrupted")
+                temp_arr = numpy.array(training_data.copy())
+                timestamp = str(current_date.day) + "-" + str(current_date.month) + "-" + str(current_date.year)[2:]\
+                        + "-" + time_str[5:]
+                temp_file_name = "training_data/" + timestamp + "_" + Move(input_move_number).name\
+                        + "L" + str(frame_length) + "SI" + str(input_sampling_interval) + "R" + str(
+                        overlap_ratio) + "(" + str(session_chunk_number) + "_incomplete" + ")"
                 numpy.save(temp_file_name, temp_arr)
-                print("Data saved in:" + temp_file_name)
+                print("Remaining data saved as", temp_file_name)
+                print("System exiting")
+                sys.exit(0)
 
 
 def evaluation_mode(mega_client, server_client, ml_client):
     # Loop Vars
-    cumulative_power = 0.0
+    temp_cumulative_power = 0.0
     evaluation_start_time = int(time.time())
 
     # (Blocking)Initial Handshake
@@ -456,40 +485,41 @@ def evaluation_mode(mega_client, server_client, ml_client):
 
     # Generate unlimited predictions
     while True:
-        time.sleep(0.5)  # human reaction time
+        move_start_time = int(time.time())  # 1-second precision of seconds since epoch
+        time.sleep(1)  # human reaction time
         mega_client.port.reset_input_buffer()  # flush input
         mega_client.discard_till_sentinel()  # flush is likely to cut off a message
 
         # Per result loop vars
-        candidates_generated = 0
         error_count = 0
-        move_start_time = int(time.time())  # 1-second precision of seconds since epoch
         candidates = []
         data_buffer = []
 
         # Per prediction loop -- 3 predictions for 1 result
-        while candidates_generated != 3:
-
+        while len(candidates) < 3:
             # Fill frame
             while len(data_buffer) < frame_length:
                 try:
-                    time.sleep(sampling_interval)
-                    mega_client.port.reset_input_buffer()  # flush input
-                    mega_client.discard_till_sentinel()  # flush is likely to cut off a message
+                    #time.sleep(sampling_interval)
+                    #mega_client.port.reset_input_buffer()  # flush input
+                    #mega_client.discard_till_sentinel()  # flush is likely to cut off a message
                     message = MessageParser.parse(mega_client.read_message())
-                except Exception as err:
-                    logging.debug(repr(err))
-                    if fail_fast:
-                        sys.exit()
+                except ValueError as err:
                     error_count += 1
                     if error_count == 3:
                         error_count = 0
                         data_buffer.clear()
+                        logging.info(repr(err))
+                        logging.info("Message validity check failed three times in a row. Buffer flushed.")
                         mega_client.three_way_handshake()
+                        logging.info("Sleeping for 5 seconds")
+                        time.sleep(5)
+                        mega_client.send_message("S")
+                        logging.info("S sent")
                 else:
                     error_count = 0
                     # Acknowledge the message
-                    #mega_client.send_message("A," + message.serial_number + "\n")  # TODO reinstate ACK later
+                    #mega_client.send_message("A," + message.serial_number + "\n")  # TODO reinstate ACK
 
                     logging.info("m:" + message.serial_number + "(" + message.type.value + ")=" + str(message.readings))
                     # Add readings set to buffer
@@ -499,42 +529,45 @@ def evaluation_mode(mega_client, server_client, ml_client):
                         move_power_readings = message.readings  # We only store 1 power reading set per move
 
             # Frame full; Generate candidate prediction from frame data
-            candidate_action = ml_client.predict(data_buffer)  # TODO this function call currently returns a dummy
-            logging.info("Frame completed. Generated candidate:" + candidate_action)
-            candidates.append(candidate_action)
-            candidates_generated += 1
+            try:
+                candidate_action = ml_client.classify(data_buffer)
+            except ValueError as err:
+                logging.info("WARNING! ML Classifier has predicted an unknown class. This should not be possible.")
+                logging.info("Emptying buffer")
+                data_buffer.clear()
+                continue  # Refill frame
+            else:
+                print("Frame completed. Generated candidate:" + candidate_action)
+                #logging.info("Frame completed. Generated candidate:" + candidate_action)
+                candidates.append(candidate_action)
 
             # Partial clear of frame buffer based on overlap
             data_buffer = data_buffer[int(frame_length*(1-overlap_ratio)):]
 
-            if candidates_generated == 3:
+            if len(candidates) == 3:
                 # Match predictions
-                match_0_1 = candidates[0] == candidates[1]
-                match_0_2 = candidates[0] == candidates[2]
-                match_1_2 = candidates[1] == candidates[2]
+                match = candidates[0] == candidates[1] == candidates[2]
 
-                # Check for 2/3
-                if match_0_1 or match_0_2 or match_1_2:
-                    # Power calculations
+                # Check for consecutive 2
+                if match:
+                    # Power calculations TODO: Mechanism to detect if power readings have been read ornot
                     move_end_time = int(time.time())
-                    move_time_ellapsed = move_end_time - move_start_time
-                    total_time_ellapsed = move_end_time - evaluation_start_time
-                    # TODO Here we assume move power readings have been read; write mechanism to detect otherwise
-                    current_power = move_power_readings[0] *\
-                        move_power_readings[1]
-                    cumulative_power = current_power \
-                        if cumulative_power == 0.0\
-                        else (((cumulative_power * total_time_ellapsed) +
-                               (current_power * move_time_ellapsed))/total_time_ellapsed)
+                    move_time_elapsed = move_end_time - move_start_time
+                    total_time_elapsed = move_end_time - evaluation_start_time
+                    temp_voltage = move_power_readings[0]  # Send as volt with max precision
+                    temp_current = move_power_readings[1] * 1000.0  # Send as milliAmperes with max precision
+                    temp_current_power = temp_voltage * temp_current  # Calculated as milliWatts with max precision
+
+                    # Calculated as joules with max precision
+                    temp_cumulative_power = (temp_current_power / 1000.0) * total_time_elapsed \
+                        if temp_cumulative_power == 0.0 \
+                        else temp_cumulative_power + (move_time_elapsed * (temp_current_power / 1000.0))
 
                     # Sending result
-                    voltage = move_power_readings[0]
-                    current = move_power_readings[1]
-                    result_string = format_results(action=candidates[0] if (match_0_1 or match_0_2)
-                                                   else candidates[1],
-                                                   voltage=format(voltage, ".2f"), current=format(current, ".2f"),
-                                                   power=format(current_power, ".2f"),
-                                                   cumulative_power=format(cumulative_power, ".2f"))
+                    result_string = format_results(action=candidates[0],
+                                                   voltage=temp_voltage, current=temp_current,
+                                                   power=temp_current_power,
+                                                   cumulative_power=temp_cumulative_power)
                     server_client.send_message(result_string)
                     move_power_readings = []  # Clear power readings
                     logging.info("Prediction accepted. Matched candidates >= 2/3")
@@ -542,14 +575,15 @@ def evaluation_mode(mega_client, server_client, ml_client):
 
                 # Unacceptable results, all 3 candidates differ; dump the first 2
                 else:
-                    candidates_generated -= 2
-                    candidates = candidates[2:]
-                    logging.info("Prediction rejected. Matched candidates < 2/3")
+                    candidates = candidates[1:]
+                    logging.info("Prediction rejected. No consecutive match")
 
 
 if __name__ == "__main__":
     args = fetch_script_arguments()
-    logging.basicConfig(level=logging.DEBUG if args.logging_mode == "debug" else logging.INFO)
+    if args.logging_mode == "info":
+        logging.basicConfig(level=logging.INFO)
+    #logging.basicConfig(level=logging.DEBUG if args.logging_mode == "debug" else logging.INFO)
     mode = 0
 
     while mode != "1" and mode != "2":
@@ -557,10 +591,10 @@ if __name__ == "__main__":
         mode = input()
 
     # Mode loops
-    if mode == "1":
+    if mode == "1":  # Interactive
         interactive_mode(args)
-    elif mode == "2":
+    elif mode == "2":  # Eval
         server_client = RpiEvalServerClient(args.target_ip, args.target_port, args.key)
         mega_client = RpiMegaClient(baudrate=args.baud_rate)
-        ml_client = RpiMLClient()
+        ml_client = RpiMLClient("trained_models/trained_model_rf_full2.sav")
         evaluation_mode(mega_client, server_client, ml_client)
