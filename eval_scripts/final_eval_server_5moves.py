@@ -70,17 +70,17 @@ class Server(threading.Thread):
 
                         'crab', 'crab', 'crab', 'crab',
 
-                        'cowboy', 'cowboy', 'cowboy', 'cowboy']
+                        'cowboy', 'cowboy', 'cowboy', 'cowboy',
 
-        #           'runningman', 'runningman', 'runningman', 'runningman',
+                   'runningman', 'runningman', 'runningman', 'runningman',
 
-        #           'jamesbond', 'jamesbond', 'jamesbond', 'jamesbond',
+                   'jamesbond', 'jamesbond', 'jamesbond', 'jamesbond',
 
-        #           'snake', 'snake', 'snake', 'snake',
+                   'snake', 'snake', 'snake', 'snake',
 
-        #           'doublepump', 'doublepump', 'doublepump', 'doublepump',
+                   'doublepump', 'doublepump', 'doublepump', 'doublepump',
 
-        #           'mermaid', 'mermaid', 'mermaid', 'mermaid']
+                   'mermaid', 'mermaid', 'mermaid', 'mermaid']
 
         
 
