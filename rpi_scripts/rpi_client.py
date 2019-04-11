@@ -616,7 +616,7 @@ if __name__ == "__main__":
     args = fetch_script_arguments()
     if args.logging_mode == "info":
         logging.basicConfig(level=logging.INFO)
-    elif args.logging.mode == "debug":
+    elif args.logging_mode == "debug":
         logging.basicConfig(level=logging.DEBUG)
     #logging.basicConfig(level=logging.DEBUG if args.logging_mode == "debug" else logging.INFO)
     mode = 0
