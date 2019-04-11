@@ -17,7 +17,6 @@ from Crypto.Cipher import AES
 from Crypto import Random
 # ML
 import numpy
-#import pickle
 from sklearn.externals import joblib
 from drangler.FeatureExtractor import get_features_from_frame
 
@@ -31,7 +30,6 @@ overlap_ratio = 0.5
 class RpiMLClient:
     def __init__(self, file_path):
         self.model = joblib.load(file_path)
-        #self.model = pickle.load(open(file_path, "rb"))
 
     # Returns dance move classified as a lowercase string
     def classify(self, input_frame):
@@ -185,6 +183,7 @@ class PowerMessageIndex(Enum):
     TIME_OF_COLLECTION = 6
     CHECKSUM = 7
 
+
 class PowerReadingsArrIndex(Enum):
     VOLTAGE = 0
     CURRENT = 1
@@ -258,12 +257,13 @@ class MessageParser:
             logging.debug("Invalid message type error:" + message_type)
             return False
 
-        # Number of elements check
+        # Number of elements check - 12 readings, serial num, message type, checksum = 15 total
         if message_type == MessageType.MOVEMENT.value and len(message_arr) != 15:
             logging.debug("Incorrect number of elements error (movement message)")
             return False
 
-        if message_type == MessageType.POWER.value and len(message_arr) != 5:
+        # Number of elements check - serial num, message type, voltage, current, power, cumulative power, computation time, checksum
+        if message_type == MessageType.POWER.value and len(message_arr) != 8:
             logging.debug("Incorrect number of elements error (power message)")
             return False
 
@@ -493,6 +493,7 @@ def evaluation_mode(mega_client, server_client, ml_client):
     # Loop Vars
     temp_cumulative_power = 0.0
     evaluation_start_time = int(time.time())
+    number_of_results_sent = 0
 
     # (Blocking)Initial Handshake
     mega_client.three_way_handshake()
@@ -522,9 +523,6 @@ def evaluation_mode(mega_client, server_client, ml_client):
             # Fill frame
             while len(data_buffer) < frame_length:
                 try:
-                    #time.sleep(sampling_interval)
-                    #mega_client.port.reset_input_buffer()  # flush input
-                    #mega_client.discard_till_sentinel()  # flush is likely to cut off a message
                     message = MessageParser.parse(mega_client.read_message())
                 except ValueError as err:
                     error_count += 1
@@ -560,7 +558,6 @@ def evaluation_mode(mega_client, server_client, ml_client):
                 continue  # Refill frame
             else:
                 print("Frame completed. Generated candidate:" + candidate_action)
-                #logging.info("Frame completed. Generated candidate:" + candidate_action)
                 candidates.append(candidate_action)
 
             # Partial clear of frame buffer based on overlap
@@ -572,22 +569,10 @@ def evaluation_mode(mega_client, server_client, ml_client):
 
                 # Check for consecutive 3
                 if match:
-                    # Power calculations TODO: Mechanism to detect if power readings have been read ornot
+                    # Check if power message has been received at least once
+                    if move_power_readings is None:
+                        move_power_readings = [0.0, 0.0, 0.0, 0.0, 0.0]
 
-                    #TODO: remove after power confirmation with usb tester
-                    #move_end_time = int(time.time())
-                    #move_time_elapsed = move_end_time - move_start_time
-                    #total_time_elapsed = move_end_time - evaluation_start_time
-                    # temp_voltage = move_power_readings[0]  # Send as volt with max precision
-                    # temp_current = move_power_readings[1] * 1000.0  # Send as milliAmperes with max precision
-                    # temp_current_power = temp_voltage * temp_current  # Calculated as milliWatts with max precision
-                    #
-                    # # Calculated as joules with max precision
-                    # temp_cumulative_power = (temp_current_power / 1000.0) * total_time_elapsed \
-                    #     if temp_cumulative_power == 0.0 \
-                    #     else temp_cumulative_power + (move_time_elapsed * (temp_current_power / 1000.0))
-
-                    if move_power_readings == None : move_power_readings=[0.0,0.0,0.0,0.0,0.0]
                     temp_voltage = move_power_readings[PowerReadingsArrIndex.VOLTAGE.value]
                     temp_current = move_power_readings[PowerReadingsArrIndex.CURRENT.value]
                     temp_power = move_power_readings[PowerReadingsArrIndex.POWER.value]
@@ -602,14 +587,18 @@ def evaluation_mode(mega_client, server_client, ml_client):
                                                    power=temp_power,
                                                    cumulative_power=temp_cumulative_power + cumulative_power_discrepancy)
                     server_client.send_message(result_string)
-                    move_power_readings = []  # Clear power readings
+                    #move_power_readings = []  # Clear power readings TODO verify power calcs
                     logging.info("Prediction accepted. Matched candidates >= 2/3")
                     logging.info("Result sent to server: " + result_string)
+                    number_of_results_sent += 1
+
+                    if number_of_results_sent > 0:
+                        print(number_of_results_sent, "results sent, average time per result:", round(float(time.time()-evaluation_start_time)/number_of_results_sent, 2), "seconds")
 
                 # Unacceptable results, all 3 candidates differ; dump the first 2
                 else:
-                    candidates = candidates[1:]
-                    logging.info("Prediction rejected. No consecutive match")
+                    candidates = candidates[2:]
+                    logging.info("Prediction rejected. No triple-consecutive match")
 
 
 if __name__ == "__main__":
@@ -618,9 +607,10 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.INFO)
     elif args.logging_mode == "debug":
         logging.basicConfig(level=logging.DEBUG)
-    #logging.basicConfig(level=logging.DEBUG if args.logging_mode == "debug" else logging.INFO)
-    mode = 0
+    else:
+        logging.basicConfig(level=logging.NOTSET)
 
+    mode = 0
     while mode != "1" and mode != "2":
         print("Select mode: (1)Interactive(Separate Testing), (2)Evaluation")
         mode = input()
