@@ -180,7 +180,17 @@ class MovementMessageIndex(Enum):
 class PowerMessageIndex(Enum):
     VOLTAGE = 2
     CURRENT = 3
-    CHECKSUM = 4
+    POWER = 4
+    CUMULATIVE_POWER = 5
+    TIME_OF_COLLECTION = 6
+    CHECKSUM = 7
+
+class PowerReadingsArrIndex(Enum):
+    VOLTAGE = 0
+    CURRENT = 1
+    POWER = 2
+    CUMULATIVE_POWER = 3
+    TIME_OF_COLLECTION = 4
 
 
 class InteractiveModeIndex(Enum):
@@ -260,7 +270,7 @@ class MessageParser:
         # Checksum validation
         end_index = len(message_string) - 5 if message_string[len(message_string) - 5] == ',' \
             else len(message_string) - 4
-        for i, c in enumerate(message_string[0:end_index]):  # checksum itself removed from the string
+        for i, c in enumerate(message_string[0:end_index]):  # Checksum calculation; checksum itself removed from the string
             checksum = ord(c) if i == 0 else (checksum ^ ord(c))
         message_arr = message_string[0:len(message_string)-2].split(',')
 
@@ -496,7 +506,7 @@ def evaluation_mode(mega_client, server_client, ml_client):
 
     # Generate unlimited predictions
     while True:
-        move_start_time = int(time.time())  # 1-second precision of seconds since epoch
+        #move_start_time = int(time.time())  # 1-second precision of seconds since epoch TODO: remove after power confirmation with usb tester
         time.sleep(1)  # human reaction time
         mega_client.port.reset_input_buffer()  # flush input
         mega_client.discard_till_sentinel()  # flush is likely to cut off a message
@@ -562,23 +572,34 @@ def evaluation_mode(mega_client, server_client, ml_client):
                 # Check for consecutive 3
                 if match:
                     # Power calculations TODO: Mechanism to detect if power readings have been read ornot
-                    move_end_time = int(time.time())
-                    move_time_elapsed = move_end_time - move_start_time
-                    total_time_elapsed = move_end_time - evaluation_start_time
-                    temp_voltage = move_power_readings[0]  # Send as volt with max precision
-                    temp_current = move_power_readings[1] * 1000.0  # Send as milliAmperes with max precision
-                    temp_current_power = temp_voltage * temp_current  # Calculated as milliWatts with max precision
 
-                    # Calculated as joules with max precision
-                    temp_cumulative_power = (temp_current_power / 1000.0) * total_time_elapsed \
-                        if temp_cumulative_power == 0.0 \
-                        else temp_cumulative_power + (move_time_elapsed * (temp_current_power / 1000.0))
+                    #TODO: remove after power confirmation with usb tester
+                    #move_end_time = int(time.time())
+                    #move_time_elapsed = move_end_time - move_start_time
+                    #total_time_elapsed = move_end_time - evaluation_start_time
+                    # temp_voltage = move_power_readings[0]  # Send as volt with max precision
+                    # temp_current = move_power_readings[1] * 1000.0  # Send as milliAmperes with max precision
+                    # temp_current_power = temp_voltage * temp_current  # Calculated as milliWatts with max precision
+                    #
+                    # # Calculated as joules with max precision
+                    # temp_cumulative_power = (temp_current_power / 1000.0) * total_time_elapsed \
+                    #     if temp_cumulative_power == 0.0 \
+                    #     else temp_cumulative_power + (move_time_elapsed * (temp_current_power / 1000.0))
 
-                    # Sending result
+                    if move_power_readings == None : move_power_readings=[0.0,0.0,0.0,0.0,0.0]
+                    temp_voltage = move_power_readings[PowerReadingsArrIndex.VOLTAGE.value]
+                    temp_current = move_power_readings[PowerReadingsArrIndex.CURRENT.value]
+                    temp_power = move_power_readings[PowerReadingsArrIndex.POWER.value]
+                    temp_cumulative_power = move_power_readings[PowerReadingsArrIndex.CUMULATIVE_POWER.value]
+                    temp_time_calculated_on_mega = move_power_readings[PowerReadingsArrIndex.TIME_OF_COLLECTION]
+                    time_discrepancy = float(temp_time_calculated_on_mega - int(time.time()))
+                    cumulative_power_discrepancy = (time_discrepancy * temp_power)/3600.0
+
+                    # Sending result: action:string, voltage: 2dp float volt, current: 2dp float ampere, power: 2dp float watts, cumulative power: 2dp float watt-hours
                     result_string = format_results(action=candidates[0],
                                                    voltage=temp_voltage, current=temp_current,
-                                                   power=temp_current_power,
-                                                   cumulative_power=temp_cumulative_power)
+                                                   power=temp_power,
+                                                   cumulative_power=temp_cumulative_power + cumulative_power_discrepancy)
                     server_client.send_message(result_string)
                     move_power_readings = []  # Clear power readings
                     logging.info("Prediction accepted. Matched candidates >= 2/3")
