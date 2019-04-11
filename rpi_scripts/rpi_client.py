@@ -504,7 +504,7 @@ def evaluation_mode(mega_client, server_client, ml_client):
     # Inform Mega to start sending data
     mega_client.send_message("S")
     logging.info("S sent")
-
+    move_power_readings = None
     # Generate unlimited predictions
     while True:
         #move_start_time = int(time.time())  # 1-second precision of seconds since epoch TODO: remove after power confirmation with usb tester
