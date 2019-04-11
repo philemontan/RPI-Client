@@ -449,6 +449,7 @@ def interactive_mode(args):
                         input_continue = input()
                         if input_continue == "n":
                             sys.exit()
+
                         else:
                             print("Press any key to start collection")
                             input()

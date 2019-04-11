@@ -70,17 +70,17 @@ class Server(threading.Thread):
 
                         'crab', 'crab', 'crab', 'crab',
 
-                        'cowboy', 'cowboy', 'cowboy', 'cowboy']
+                        'cowboy', 'cowboy', 'cowboy', 'cowboy',
 
-        #           'runningman', 'runningman', 'runningman', 'runningman',
+                   'runningman', 'runningman', 'runningman', 'runningman',
 
-        #           'jamesbond', 'jamesbond', 'jamesbond', 'jamesbond',
+                   'jamesbond', 'jamesbond', 'jamesbond', 'jamesbond',
 
-        #           'snake', 'snake', 'snake', 'snake',
+                   'snake', 'snake', 'snake', 'snake',
 
-        #           'doublepump', 'doublepump', 'doublepump', 'doublepump',
+                   'doublepump', 'doublepump', 'doublepump', 'doublepump',
 
-        #           'mermaid', 'mermaid', 'mermaid', 'mermaid']
+                   'mermaid', 'mermaid', 'mermaid', 'mermaid']
 
         
 
@@ -104,7 +104,7 @@ class Server(threading.Thread):
 
         self.x = 0
 
-        self.timeout = 60
+        self.timeout = 30
 
         self.no_response = False
 
