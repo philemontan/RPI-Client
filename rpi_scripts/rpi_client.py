@@ -51,6 +51,16 @@ class RpiMLClient:
             return "crab"
         elif result == Move.COWBOY.value:
             return "cowboy"
+        elif result == Move.RUNNINGMAN.value:
+            return "runningman"
+        elif result == Move.JAMESBOND.value:
+            return "jamesbond"
+        elif result == Move.SNAKE.value:
+            return "snake"
+        elif result == Move.DOUBLEPUMP.value:
+            return "doublepump"
+        elif result == Move.MERMAID.value:
+            return "mermaid"
         else:
             raise ValueError("unexpected class")
 
@@ -291,7 +301,7 @@ def fetch_script_arguments():
 def interactive_mode(args):
     """Interactive mode intended for convenient testing"""
     while True:
-        print("Component to test: (1)Comms to server, (2)Comms to arduino (3)Training - group (4) Training - solo")
+        print("Component to test: (1)Comms to server, (2)Comms to arduino (3)Training - solo")
         mode = input()
 
         # Socket communication to Server
@@ -378,7 +388,7 @@ def interactive_mode(args):
             print("--Autosaves every 100 frames => ~100s for frame length of 20")
             print("--System max data points per second is ~20 => 0.05s sampling interval")
             print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n")
-            print("Move numbers:(0)FINAL, (1)HUNCHBACK, (2)RAFFLES, (3)CHICKEN, (4)CRAB, (5)COWBOY")
+            print("Move numbers:(0)FINAL, (1)HUNCHBACK, (2)RAFFLES, (3)CHICKEN, (4)CRAB, (5)COWBOY, (6)RUNNINGMAN, (7)JAMESBOND, (8)SNAKE, (9)DOUBLEPUMP, (10)MERMAID")
             print("Enter: move number, frame length, sampling interval")
 
             params = input().split()
@@ -487,7 +497,7 @@ def evaluation_mode(mega_client, server_client, ml_client):
     # Generate unlimited predictions
     while True:
         move_start_time = int(time.time())  # 1-second precision of seconds since epoch
-        time.sleep(0.5)  # human reaction time
+        time.sleep(1)  # human reaction time
         mega_client.port.reset_input_buffer()  # flush input
         mega_client.discard_till_sentinel()  # flush is likely to cut off a message
 
@@ -497,13 +507,13 @@ def evaluation_mode(mega_client, server_client, ml_client):
         data_buffer = []
 
         # Per prediction loop -- 3 predictions for 1 result
-        while len(candidates) < 2:
+        while len(candidates) < 3:
             # Fill frame
             while len(data_buffer) < frame_length:
                 try:
-                    time.sleep(sampling_interval)
-                    mega_client.port.reset_input_buffer()  # flush input
-                    mega_client.discard_till_sentinel()  # flush is likely to cut off a message
+                    #time.sleep(sampling_interval)
+                    #mega_client.port.reset_input_buffer()  # flush input
+                    #mega_client.discard_till_sentinel()  # flush is likely to cut off a message
                     message = MessageParser.parse(mega_client.read_message())
                 except ValueError as err:
                     error_count += 1
@@ -545,11 +555,11 @@ def evaluation_mode(mega_client, server_client, ml_client):
             # Partial clear of frame buffer based on overlap
             data_buffer = data_buffer[int(frame_length*(1-overlap_ratio)):]
 
-            if len(candidates) == 2:
+            if len(candidates) == 3:
                 # Match predictions
-                match = candidates[0] == candidates[1]
+                match = candidates[0] == candidates[1] == candidates[2]
 
-                # Check for consecutive 2
+                # Check for consecutive 3
                 if match:
                     # Power calculations TODO: Mechanism to detect if power readings have been read ornot
                     move_end_time = int(time.time())
@@ -597,5 +607,5 @@ if __name__ == "__main__":
     elif mode == "2":  # Eval
         server_client = RpiEvalServerClient(args.target_ip, args.target_port, args.key)
         mega_client = RpiMegaClient(baudrate=args.baud_rate)
-        ml_client = RpiMLClient("trained_models/trained_model_rf_full2.sav")
+        ml_client = RpiMLClient("trained_models/trained_model_rf_all.sav")
         evaluation_mode(mega_client, server_client, ml_client)
