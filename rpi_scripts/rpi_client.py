@@ -592,7 +592,7 @@ def evaluation_mode(mega_client, server_client, ml_client):
                     temp_current = move_power_readings[PowerReadingsArrIndex.CURRENT.value]
                     temp_power = move_power_readings[PowerReadingsArrIndex.POWER.value]
                     temp_cumulative_power = move_power_readings[PowerReadingsArrIndex.CUMULATIVE_POWER.value]
-                    temp_time_calculated_on_mega = move_power_readings[PowerReadingsArrIndex.TIME_OF_COLLECTION]
+                    temp_time_calculated_on_mega = move_power_readings[PowerReadingsArrIndex.TIME_OF_COLLECTION.value]
                     time_discrepancy = float(temp_time_calculated_on_mega - int(time.time()))
                     cumulative_power_discrepancy = (time_discrepancy * temp_power)/3600.0
 
