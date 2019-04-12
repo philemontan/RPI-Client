@@ -586,7 +586,7 @@ def evaluation_mode(mega_client, server_client, ml_client):
 
                 # Unacceptable results, all 3 candidates differ; dump the first 2
                 else:
-                    candidates = candidates[1:]
+                    candidates = candidates[2:]
                     logging.info("Prediction rejected. No consecutive match")
 
 
