@@ -343,16 +343,15 @@ def interactive_mode(args):
 
                 # Repeat read & print
                 elif mode == "2":
-                    try:
-                        print("Enter any key to begin:")
-                        input()
-                        time.sleep(3)
-                        mega_client.port.reset_input_buffer()
-                        mega_client.discard_till_sentinel()
-                        while True:
-                            print("Message received: ", mega_client.read_message())
-                    except KeyboardInterrupt:
-                        pass
+                    print("Enter any key to begin:")
+                    input()
+                    mega_client.send_message("S")
+                    time.sleep(5)
+                    start_time = int(time.time())
+                    while True:
+                        print("Message received: ", mega_client.read_message())
+                        if int(time.time()) - start_time > 5:
+                            break
 
                 # Handshake Mode
                 elif mode == "3":
