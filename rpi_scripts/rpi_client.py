@@ -263,8 +263,10 @@ class MessageParser:
             return False
 
         # Number of elements check - serial num, message type, voltage, current, power, cumulative power, computation time, checksum
-        if message_type == MessageType.POWER.value and len(message_arr) != 8:
+        if message_type == MessageType.POWER.value and len(message_arr) != 7:
             logging.debug("Incorrect number of elements error (power message)")
+            print(message_arr)
+
             return False
 
         # Checksum validation
