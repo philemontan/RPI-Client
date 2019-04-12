@@ -579,13 +579,13 @@ def evaluation_mode(mega_client, server_client, ml_client):
                     temp_cumulative_power = move_power_readings[PowerReadingsArrIndex.CUMULATIVE_POWER.value]
                     temp_time_calculated_on_mega = move_power_readings[PowerReadingsArrIndex.TIME_OF_COLLECTION.value]
                     time_discrepancy = float(temp_time_calculated_on_mega - int(time.time()))
-                    cumulative_power_discrepancy = (time_discrepancy * temp_power)/3600.0
+                    #cumulative_power_discrepancy = (time_discrepancy * temp_power)/3600.0
 
                     # Sending result: action:string, voltage: 2dp float volt, current: 2dp float ampere, power: 2dp float watts, cumulative power: 2dp float watt-hours
                     result_string = format_results(action=candidates[0],
                                                    voltage=temp_voltage, current=temp_current,
                                                    power=temp_power,
-                                                   cumulative_power=temp_cumulative_power + cumulative_power_discrepancy)
+                                                   cumulative_power=temp_cumulative_power)
                     server_client.send_message(result_string)
                     #move_power_readings = []  # Clear power readings TODO verify power calcs
                     logging.info("Prediction accepted. Matched candidates >= 2/3")
