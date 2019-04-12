@@ -482,7 +482,7 @@ def evaluation_mode(mega_client, server_client, ml_client):
     # Loop Vars
     temp_cumulative_power = 0.0
     evaluation_start_time = int(time.time())
-
+    number_results_sent = 0
     # (Blocking)Initial Handshake
     mega_client.three_way_handshake()
 
@@ -583,6 +583,8 @@ def evaluation_mode(mega_client, server_client, ml_client):
                     move_power_readings = []  # Clear power readings
                     logging.info("Prediction accepted. Matched candidates >= 2/3")
                     logging.info("Result sent to server: " + result_string)
+                    number_results_sent =+ 1
+                    print(number_results_sent, "results sent - avg time taken:", float(int(time.time())-evaluation_start_time)/number_results_sent, "seconds")
 
                 # Unacceptable results, all 3 candidates differ; dump the first 2
                 else:
