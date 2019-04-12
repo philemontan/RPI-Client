@@ -494,10 +494,12 @@ def evaluation_mode(mega_client, server_client, ml_client):
     mega_client.send_message("S")
     logging.info("S sent")
 
+    performance_start_time = int(time.time())
+
     # Generate unlimited predictions
     while True:
         move_start_time = int(time.time())  # 1-second precision of seconds since epoch
-        time.sleep(1)  # human reaction time
+        time.sleep(1.5)  # human reaction time
         mega_client.port.reset_input_buffer()  # flush input
         mega_client.discard_till_sentinel()  # flush is likely to cut off a message
 
@@ -583,8 +585,8 @@ def evaluation_mode(mega_client, server_client, ml_client):
                     move_power_readings = []  # Clear power readings
                     logging.info("Prediction accepted. Matched candidates >= 2/3")
                     logging.info("Result sent to server: " + result_string)
-                    number_results_sent =+ 1
-                    print(number_results_sent, "results sent - avg time taken:", float(int(time.time())-evaluation_start_time)/number_results_sent, "seconds")
+                    number_results_sent += 1
+                    print(number_results_sent, "results sent - avg time taken:", float(int(time.time())-performance_start_time)/number_results_sent, "seconds")
 
                 # Unacceptable results, all 3 candidates differ; dump the first 2
                 else:
