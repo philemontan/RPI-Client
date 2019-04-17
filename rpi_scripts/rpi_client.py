@@ -499,7 +499,7 @@ def evaluation_mode(mega_client, server_client, ml_client):
     # Generate unlimited predictions
     while True:
         move_start_time = int(time.time())  # 1-second precision of seconds since epoch
-        time.sleep(1.5)  # human reaction time
+        time.sleep(1)  # human reaction time
         mega_client.port.reset_input_buffer()  # flush input
         mega_client.discard_till_sentinel()  # flush is likely to cut off a message
 
@@ -509,7 +509,7 @@ def evaluation_mode(mega_client, server_client, ml_client):
         data_buffer = []
 
         # Per prediction loop -- 3 predictions for 1 result
-        while len(candidates) < 3:
+        while len(candidates) < 2:
             # Fill frame
             while len(data_buffer) < frame_length:
                 try:
@@ -557,11 +557,11 @@ def evaluation_mode(mega_client, server_client, ml_client):
             # Partial clear of frame buffer based on overlap
             data_buffer = data_buffer[int(frame_length*(1-overlap_ratio)):]
 
-            if len(candidates) == 3:
+            if len(candidates) == 2:
                 # Match predictions
-                match = candidates[0] == candidates[1] == candidates[2]
+                match = candidates[0] == candidates[1]
 
-                # Check for consecutive 3
+                # Check for consecutive 2
                 if match:
                     # Power calculations TODO: Mechanism to detect if power readings have been read ornot
                     move_end_time = int(time.time())
@@ -590,7 +590,7 @@ def evaluation_mode(mega_client, server_client, ml_client):
 
                 # Unacceptable results, all 3 candidates differ; dump the first 2
                 else:
-                    candidates = candidates[2:]
+                    candidates = candidates[1:]
                     logging.info("Prediction rejected. No consecutive match")
 
 
