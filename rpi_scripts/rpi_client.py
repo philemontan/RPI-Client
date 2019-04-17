@@ -459,7 +459,9 @@ def interactive_mode(args):
                         input_continue = input()
                         if input_continue == "n":
                             sys.exit()
-
+                        elif input_continue == "y":
+                            mega_client.port.reset_input_buffer()
+                            mega_client.discard_till_sentinel()
                         else:
                             print("Press any key to start collection")
                             input()
