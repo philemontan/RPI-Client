@@ -23,7 +23,7 @@ from drangler.FeatureExtractor import get_features_from_frame
 
 # Global Flags
 frame_length = 20  # 1 frame per prediction
-sampling_interval = 0.05  # frames per second = frame_length / (1 / sampling interval) ==> 1 frame per second
+sampling_interval = 0 # frames per second = frame_length / (1 / sampling interval) ==> 1 frame per second
 overlap_ratio = 0.5
 
 
