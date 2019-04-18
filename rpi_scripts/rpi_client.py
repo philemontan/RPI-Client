@@ -569,14 +569,14 @@ def evaluation_mode(mega_client, server_client, ml_client):
                     move_end_time = int(time.time())
                     move_time_elapsed = move_end_time - move_start_time
                     total_time_elapsed = move_end_time - evaluation_start_time
-                    temp_voltage = move_power_readings[0]  # Send as volt with max precision
-                    temp_current = move_power_readings[1] * 1000.0  # Send as milliAmperes with max precision
-                    temp_current_power = temp_voltage * temp_current  # Calculated as milliWatts with max precision
+                    temp_voltage = move_power_readings[0]  # Send as Volts, 2.d.p from Mega
+                    temp_current = move_power_readings[1]  # Send as Amperes, 2.d.p from Mega
+                    temp_current_power = temp_voltage * temp_current  # Send as Watts
 
-                    # Calculated as joules with max precision
-                    temp_cumulative_power = (temp_current_power / 1000.0) * total_time_elapsed \
+                    # Calculated as watt-hours with max precision
+                    temp_cumulative_power = (temp_current_power * total_time_elapsed)/3600.0 \
                         if temp_cumulative_power == 0.0 \
-                        else temp_cumulative_power + (move_time_elapsed * (temp_current_power / 1000.0))
+                        else temp_cumulative_power + (temp_current_power * move_time_elapsed)
 
                     # Sending result
                     result_string = format_results(action=candidates[0],
