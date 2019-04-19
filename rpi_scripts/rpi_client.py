@@ -26,7 +26,8 @@ frame_length = 20  # 1 frame per prediction
 sampling_interval = 0 # frames per second = frame_length / (1 / sampling interval) ==> 1 frame per second
 overlap_ratio = 0.5
 # evaluation start time retrieved the instant the script runs in main
-evaluation_start_time = 0
+global evaluation_start_time
+evaluation_start_time = int(time.time())
 
 # Client for ML prediction, training data generation
 class RpiMLClient:
@@ -599,8 +600,6 @@ def evaluation_mode(mega_client, server_client, ml_client):
 
 
 if __name__ == "__main__":
-    global evaluation_start_time
-    evaluation_start_time = int(time.time())
     args = fetch_script_arguments()
     if args.logging_mode == "info":
         logging.basicConfig(level=logging.INFO)
