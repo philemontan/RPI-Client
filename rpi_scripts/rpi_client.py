@@ -583,9 +583,9 @@ def evaluation_mode(mega_client, server_client, ml_client):
 
                     # Sending result
                     result_string = format_results(action=candidates[0],
-                                                   voltage=temp_voltage, current=temp_current,
-                                                   power=temp_current_power,
-                                                   cumulative_power=temp_cumulative_power)
+                                                   voltage=round(temp_voltage, 4), current=round(temp_current, 4),
+                                                   power=round(temp_current_power,4),
+                                                   cumulative_power=round(temp_cumulative_power, 4))
                     server_client.send_message(result_string)
                     move_power_readings = []  # Clear power readings
                     logging.info("Prediction accepted. Matched candidates >= 2/3")
