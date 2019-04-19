@@ -504,7 +504,7 @@ def evaluation_mode(mega_client, server_client, ml_client):
     # Generate unlimited predictions
     while True:
         move_start_time = int(time.time())  # 1-second precision of seconds since epoch
-        time.sleep(1)  # human reaction time
+        time.sleep(0.8)  # human reaction time
         mega_client.port.reset_input_buffer()  # flush input
         mega_client.discard_till_sentinel()  # flush is likely to cut off a message
 
