@@ -25,7 +25,8 @@ from drangler.FeatureExtractor import get_features_from_frame
 frame_length = 20  # 1 frame per prediction
 sampling_interval = 0 # frames per second = frame_length / (1 / sampling interval) ==> 1 frame per second
 overlap_ratio = 0.5
-
+# evaluation start time retrieved the instant the script runs in main
+evaluation_start_time = 0
 
 # Client for ML prediction, training data generation
 class RpiMLClient:
@@ -483,7 +484,8 @@ def interactive_mode(args):
 def evaluation_mode(mega_client, server_client, ml_client):
     # Loop Vars
     temp_cumulative_power = 0.0
-    evaluation_start_time = int(time.time())
+    #evaluation_start_time = int(time.time())
+    global evaluation_start_time
     number_results_sent = 0
     # (Blocking)Initial Handshake
     mega_client.three_way_handshake()
@@ -576,7 +578,7 @@ def evaluation_mode(mega_client, server_client, ml_client):
                     # Calculated as watt-hours with max precision
                     temp_cumulative_power = (temp_current_power * total_time_elapsed)/3600.0 \
                         if temp_cumulative_power == 0.0 \
-                        else temp_cumulative_power + (temp_current_power * move_time_elapsed)
+                        else temp_cumulative_power + (temp_current_power * move_time_elapsed)/3600.0
 
                     # Sending result
                     result_string = format_results(action=candidates[0],
@@ -597,6 +599,8 @@ def evaluation_mode(mega_client, server_client, ml_client):
 
 
 if __name__ == "__main__":
+    global evaluation_start_time
+    evaluation_start_time = int(time.time())
     args = fetch_script_arguments()
     if args.logging_mode == "info":
         logging.basicConfig(level=logging.INFO)
