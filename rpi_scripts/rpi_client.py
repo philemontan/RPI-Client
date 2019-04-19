@@ -23,9 +23,11 @@ from drangler.FeatureExtractor import get_features_from_frame
 
 # Global Flags
 frame_length = 20  # 1 frame per prediction
-sampling_interval = 0.05  # frames per second = frame_length / (1 / sampling interval) ==> 1 frame per second
+sampling_interval = 0 # frames per second = frame_length / (1 / sampling interval) ==> 1 frame per second
 overlap_ratio = 0.5
-
+# evaluation start time retrieved the instant the script runs in main
+global evaluation_start_time
+evaluation_start_time = int(time.time())
 
 # Client for ML prediction, training data generation
 class RpiMLClient:
@@ -51,6 +53,16 @@ class RpiMLClient:
             return "crab"
         elif result == Move.COWBOY.value:
             return "cowboy"
+        elif result == Move.RUNNINGMAN.value:
+            return "runningman"
+        elif result == Move.JAMESBOND.value:
+            return "jamesbond"
+        elif result == Move.SNAKE.value:
+            return "snake"
+        elif result == Move.DOUBLEPUMP.value:
+            return "doublepump"
+        elif result == Move.MERMAID.value:
+            return "mermaid"
         else:
             raise ValueError("unexpected class")
 
@@ -449,6 +461,9 @@ def interactive_mode(args):
                         input_continue = input()
                         if input_continue == "n":
                             sys.exit()
+                        elif input_continue == "y":
+                            mega_client.port.reset_input_buffer()
+                            mega_client.discard_till_sentinel()
                         else:
                             print("Press any key to start collection")
                             input()
@@ -470,8 +485,9 @@ def interactive_mode(args):
 def evaluation_mode(mega_client, server_client, ml_client):
     # Loop Vars
     temp_cumulative_power = 0.0
-    evaluation_start_time = int(time.time())
-
+    #evaluation_start_time = int(time.time())
+    global evaluation_start_time
+    number_results_sent = 0
     # (Blocking)Initial Handshake
     mega_client.three_way_handshake()
 
@@ -483,10 +499,12 @@ def evaluation_mode(mega_client, server_client, ml_client):
     mega_client.send_message("S")
     logging.info("S sent")
 
+    performance_start_time = int(time.time())
+
     # Generate unlimited predictions
     while True:
         move_start_time = int(time.time())  # 1-second precision of seconds since epoch
-        time.sleep(1)  # human reaction time
+        time.sleep(0.8)  # human reaction time
         mega_client.port.reset_input_buffer()  # flush input
         mega_client.discard_till_sentinel()  # flush is likely to cut off a message
 
@@ -496,7 +514,7 @@ def evaluation_mode(mega_client, server_client, ml_client):
         data_buffer = []
 
         # Per prediction loop -- 3 predictions for 1 result
-        while len(candidates) < 3:
+        while len(candidates) < 2:
             # Fill frame
             while len(data_buffer) < frame_length:
                 try:
@@ -544,9 +562,9 @@ def evaluation_mode(mega_client, server_client, ml_client):
             # Partial clear of frame buffer based on overlap
             data_buffer = data_buffer[int(frame_length*(1-overlap_ratio)):]
 
-            if len(candidates) == 3:
+            if len(candidates) == 2:
                 # Match predictions
-                match = candidates[0] == candidates[1] == candidates[2]
+                match = candidates[0] == candidates[1]
 
                 # Check for consecutive 2
                 if match:
@@ -554,24 +572,26 @@ def evaluation_mode(mega_client, server_client, ml_client):
                     move_end_time = int(time.time())
                     move_time_elapsed = move_end_time - move_start_time
                     total_time_elapsed = move_end_time - evaluation_start_time
-                    temp_voltage = move_power_readings[0]  # Send as volt with max precision
-                    temp_current = move_power_readings[1] * 1000.0  # Send as milliAmperes with max precision
-                    temp_current_power = temp_voltage * temp_current  # Calculated as milliWatts with max precision
+                    temp_voltage = move_power_readings[0]  # Send as Volts, 2.d.p from Mega
+                    temp_current = move_power_readings[1]  # Send as Amperes, 2.d.p from Mega
+                    temp_current_power = temp_voltage * temp_current  # Send as Watts
 
-                    # Calculated as joules with max precision
-                    temp_cumulative_power = (temp_current_power / 1000.0) * total_time_elapsed \
+                    # Calculated as watt-hours with max precision
+                    temp_cumulative_power = (temp_current_power * total_time_elapsed)/3600.0 \
                         if temp_cumulative_power == 0.0 \
-                        else temp_cumulative_power + (move_time_elapsed * (temp_current_power / 1000.0))
+                        else temp_cumulative_power + (temp_current_power * move_time_elapsed)/3600.0
 
                     # Sending result
                     result_string = format_results(action=candidates[0],
-                                                   voltage=temp_voltage, current=temp_current,
-                                                   power=temp_current_power,
-                                                   cumulative_power=temp_cumulative_power)
+                                                   voltage=round(temp_voltage, 4), current=round(temp_current, 4),
+                                                   power=round(temp_current_power,4),
+                                                   cumulative_power=round(temp_cumulative_power, 4))
                     server_client.send_message(result_string)
                     move_power_readings = []  # Clear power readings
                     logging.info("Prediction accepted. Matched candidates >= 2/3")
                     logging.info("Result sent to server: " + result_string)
+                    number_results_sent += 1
+                    print(number_results_sent, "results sent - avg time taken:", float(int(time.time())-performance_start_time)/number_results_sent, "seconds")
 
                 # Unacceptable results, all 3 candidates differ; dump the first 2
                 else:
@@ -596,5 +616,5 @@ if __name__ == "__main__":
     elif mode == "2":  # Eval
         server_client = RpiEvalServerClient(args.target_ip, args.target_port, args.key)
         mega_client = RpiMegaClient(baudrate=args.baud_rate)
-        ml_client = RpiMLClient("trained_models/trained_model_rf_full2.sav")
+        ml_client = RpiMLClient("trained_models/trained_model_rf_full.sav")
         evaluation_mode(mega_client, server_client, ml_client)
